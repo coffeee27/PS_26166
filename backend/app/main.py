@@ -111,6 +111,15 @@ async def analyze_images(
             )
         )
         
+        registered_image = cv2.warpPerspective(
+            source_image,
+            H,
+            (reference_image.shape[1], reference_image.shape[0])
+        )
+        
+        registered_path = os.path.join(upload_dir, "registered.jpg")
+
+        cv2.imwrite(registered_path, registered_image)
         
     
     except Exception:
@@ -128,7 +137,7 @@ async def analyze_images(
             {
                 "source": source_keypoints[m.queryIdx].pt,
                 "reference": reference_keypoints[m.trainIdx].pt,
-                "confidence": 1 / (1 + m.distance)
+                "distance": float(m.distance)
             }
             for m in inlier_matches
         ],
@@ -137,6 +146,7 @@ async def analyze_images(
             "rmse": rmse,
             "inlier_count": inlier_count,
             "inlier_ratio": inlier_ratio
-        }
+        },
+        "registered_image": "data/uploads/registered.jpg",
     }
 }
