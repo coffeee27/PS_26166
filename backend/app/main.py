@@ -2,6 +2,8 @@ import os
 from fastapi import FastAPI, UploadFile, File
 from PIL import Image
 from io import BytesIO
+import cv2
+import numpy as np
 
 app = FastAPI(
     title="Lunar Image Matching API",
@@ -39,6 +41,78 @@ async def analyze_images(
     try:
         Image.open(source_path).verify()
         Image.open(reference_path).verify()
+        
+        source_image = cv2.imread(source_path)
+        reference_image = cv2.imread(reference_path)
+        
+        if source_image is None or reference_image is None:
+            return {
+                "status": "error",
+                "message": "Could not load one or both images with OpenCV"
+            }
+            
+        print(source_image.shape)
+        print(reference_image.shape)
+        
+        source_gray = cv2.cvtColor(source_image, cv2.COLOR_BGR2GRAY)
+        reference_gray = cv2.cvtColor(reference_image, cv2.COLOR_BGR2GRAY)
+        
+        sift = cv2.SIFT_create()
+        source_keypoints, source_descriptors = sift.detectAndCompute(source_gray, None)
+        reference_keypoints, reference_descriptors = sift.detectAndCompute(reference_gray, None)
+        
+        bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+
+        matches = bf.match(source_descriptors, reference_descriptors)
+        matches = sorted(matches, key=lambda x: x.distance)
+        good_matches = matches[:100]
+        
+        source_points = np.float32(
+            [source_keypoints[m.queryIdx].pt for m in good_matches]
+        ).reshape(-1, 1, 2)
+
+        reference_points = np.float32(
+            [reference_keypoints[m.trainIdx].pt for m in good_matches]
+        ).reshape(-1, 1, 2)
+        
+        H, mask = cv2.findHomography(
+            source_points,
+            reference_points,
+            cv2.RANSAC,
+            5.0
+        )
+        
+        if H is None or mask is None:
+            return {
+                "status": "error",
+                "message": "Could not estimate transformation"
+            }
+            
+        inlier_matches = [
+            match for match, inlier in zip(good_matches, mask.ravel())
+            if inlier
+        ]
+        
+        inlier_count = len(inlier_matches)
+        inlier_ratio = inlier_count / len(good_matches) if good_matches else 0
+        
+        inlier_mask = mask.ravel().astype(bool)
+
+        src_inliers = source_points[inlier_mask]
+        ref_inliers = reference_points[inlier_mask]
+
+        projected = cv2.perspectiveTransform(src_inliers, H)
+
+        rmse = float(
+            np.sqrt(
+                np.mean(
+                    np.sum((projected - ref_inliers) ** 2, axis=2)
+                )
+            )
+        )
+        
+        
+    
     except Exception:
         return {
             "status": "error",
@@ -50,12 +124,19 @@ async def analyze_images(
     "source_filename": source.filename,
     "reference_filename": reference.filename,
     "result": {
-        "matches": [],
-        "transformation": None,
+        "matches": [
+            {
+                "source": source_keypoints[m.queryIdx].pt,
+                "reference": reference_keypoints[m.trainIdx].pt,
+                "confidence": 1 / (1 + m.distance)
+            }
+            for m in inlier_matches
+        ],
+        "transformation": H.tolist(),
         "metrics": {
-            "rmse": None,
-            "inlier_count": None,
-            "inlier_ratio": None
+            "rmse": rmse,
+            "inlier_count": inlier_count,
+            "inlier_ratio": inlier_ratio
         }
     }
 }
