@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from io import BytesIO
 import cv2
@@ -12,6 +13,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.mount("/data", StaticFiles(directory="data"), name="data")
 
 @app.get("/health")
 def health_check():
@@ -133,7 +135,7 @@ async def analyze_images(
             "spatial_coverage": spatial_coverage,
              "uniformity_score": uniformity_score
         },
-        "registered_image": "data/uploads/registered.jpg",
+        "registered_image": "/data/uploads/registered.jpg",
 
             
             
