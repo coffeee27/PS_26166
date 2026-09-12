@@ -4,6 +4,7 @@ from PIL import Image
 from io import BytesIO
 import cv2
 import numpy as np
+from app.services.geometric_verification import verify_matches
 
 app = FastAPI(
     title="Lunar Image Matching API",
@@ -75,41 +76,15 @@ async def analyze_images(
             [reference_keypoints[m.trainIdx].pt for m in good_matches]
         ).reshape(-1, 1, 2)
         
-        H, mask = cv2.findHomography(
-            source_points,
-            reference_points,
-            cv2.RANSAC,
-            5.0
-        )
-        
-        if H is None or mask is None:
-            return {
-                "status": "error",
-                "message": "Could not estimate transformation"
-            }
-            
-        inlier_matches = [
-            match for match, inlier in zip(good_matches, mask.ravel())
-            if inlier
-        ]
-        
-        inlier_count = len(inlier_matches)
-        inlier_ratio = inlier_count / len(good_matches) if good_matches else 0
-        
-        inlier_mask = mask.ravel().astype(bool)
+        H, inlier_matches, geometric_metrics = verify_matches(
+           source_points,
+           reference_points,
+           good_matches,
+           source_gray.shape,
+           source_keypoints
+)
 
-        src_inliers = source_points[inlier_mask]
-        ref_inliers = reference_points[inlier_mask]
 
-        projected = cv2.perspectiveTransform(src_inliers, H)
-
-        rmse = float(
-            np.sqrt(
-                np.mean(
-                    np.sum((projected - ref_inliers) ** 2, axis=2)
-                )
-            )
-        )
         
         registered_image = cv2.warpPerspective(
             source_image,
@@ -120,13 +95,22 @@ async def analyze_images(
         registered_path = os.path.join(upload_dir, "registered.jpg")
 
         cv2.imwrite(registered_path, registered_image)
+
+        rmse = geometric_metrics["rmse"]
+        inlier_count = geometric_metrics["inlier_count"]
+        inlier_ratio = geometric_metrics["inlier_ratio"]
+        spatial_coverage = geometric_metrics["spatial_coverage"]
+        uniformity_score = geometric_metrics["uniformity_score"]
+                
+
         
     
-    except Exception:
-        return {
-            "status": "error",
-            "message": "One or both uploaded files are not valid images"
-        }
+    except Exception as e:
+      print("ERROR:", repr(e))
+      return {
+        "status": "error",
+        "message": str(e)
+    }
 
     return {
     "status": "success",
@@ -145,8 +129,16 @@ async def analyze_images(
         "metrics": {
             "rmse": rmse,
             "inlier_count": inlier_count,
-            "inlier_ratio": inlier_ratio
+            "inlier_ratio": inlier_ratio,
+            "spatial_coverage": spatial_coverage,
+             "uniformity_score": uniformity_score
         },
         "registered_image": "data/uploads/registered.jpg",
+
+            
+            
+        
+        
+ 
     }
 }
