@@ -6,6 +6,7 @@ from io import BytesIO
 import cv2
 import numpy as np
 from app.services.geometric_verification import verify_matches
+from app.services.quality_assessment import assess_registration_quality
 
 app = FastAPI(
     title="Lunar Image Matching API",
@@ -99,10 +100,12 @@ async def analyze_images(
         cv2.imwrite(registered_path, registered_image)
 
         rmse = geometric_metrics["rmse"]
+        max_error = geometric_metrics["max_error"]
         inlier_count = geometric_metrics["inlier_count"]
         inlier_ratio = geometric_metrics["inlier_ratio"]
         spatial_coverage = geometric_metrics["spatial_coverage"]
         uniformity_score = geometric_metrics["uniformity_score"]
+        quality_assessment = assess_registration_quality(geometric_metrics)
                 
 
         
@@ -130,11 +133,13 @@ async def analyze_images(
         "transformation": H.tolist(),
         "metrics": {
             "rmse": rmse,
+            "max_error": max_error,
             "inlier_count": inlier_count,
             "inlier_ratio": inlier_ratio,
             "spatial_coverage": spatial_coverage,
              "uniformity_score": uniformity_score
         },
+        "quality_assessment": quality_assessment,
         "registered_image": "/data/uploads/registered.jpg",
 
             
