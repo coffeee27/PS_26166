@@ -60,6 +60,13 @@ def verify_matches(source_points,
         )
     )
 
+    errors = np.sqrt(
+    np.sum((projected - ref_inliers) ** 2, axis=2)
+)
+
+    max_error = float(np.max(errors))
+
+
     # Spatial distribution of inlier matches
     h, w = image_shape[:2]
 
@@ -74,6 +81,7 @@ def verify_matches(source_points,
         grid[row, col] += 1
 
     occupied_cells = np.count_nonzero(grid)
+    occupied_cell_indices = np.argwhere(grid > 0).tolist()
     total_cells = grid_rows * grid_cols
 
     spatial_coverage = occupied_cells / total_cells
@@ -91,8 +99,10 @@ def verify_matches(source_points,
 
     return H, inlier_matches, {
         "rmse": rmse,
+        "max_error": max_error,
         "inlier_count": inlier_count,
         "inlier_ratio": inlier_ratio,
         "spatial_coverage": spatial_coverage,
+        "occupied_cells": occupied_cell_indices,
         "uniformity_score": uniformity_score
     }

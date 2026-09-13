@@ -86,7 +86,20 @@ async def analyze_images(
            source_gray.shape,
            source_keypoints
 )
+        match_visualization = cv2.drawMatches(
+          source_image,
+          source_keypoints,
+          reference_image,
+          reference_keypoints,
+          inlier_matches,
+          None,
+          flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS
+)
 
+        cv2.imwrite(
+           os.path.join(upload_dir, "inlier_matches.jpg"),
+           match_visualization
+)
 
         
         registered_image = cv2.warpPerspective(
@@ -137,6 +150,7 @@ async def analyze_images(
             "inlier_count": inlier_count,
             "inlier_ratio": inlier_ratio,
             "spatial_coverage": spatial_coverage,
+            "occupied_cells": geometric_metrics["occupied_cells"],
              "uniformity_score": uniformity_score
         },
         "quality_assessment": quality_assessment,
