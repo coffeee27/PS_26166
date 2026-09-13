@@ -218,11 +218,20 @@ export const en = {
   landingFinalDesc: "Load a source and a reference frame, then run the correspondence pipeline end to end.",
 
   // ---- Scroll video hero ----
-  heroCapIntroTitle: "Different light. Same Moon.",
-  heroCapIntroSub: "Scroll to begin the mission",
-  heroCapEyes: "Chandrayaan-2 watches the Moon through three eyes: OHRC, TMC-2 and IIRS.",
-  heroCapChange: "Every pass brings a new sun angle, a new scale and a new sensor.",
-  heroCapOutro: "Scroll on to see how we make every image line up.",
+  heroAria: "Scroll-driven mission animation",
+  heroC1a: "Different light.",
+  heroC1b: "Same Moon.",
+  heroC1Sub: "Scroll to launch",
+  heroC2a: "Chandrayaan-2 watches the Moon with",
+  heroC2b: "three eyes.",
+  heroC3a: "Every orbit, the shadows move.",
+  heroC3flip: "Craters flip.",
+  heroC3jump: "Scales jump.",
+  heroC3disagree: "Sensors disagree.",
+  heroC4Type: "Incoming transmission from the crew",
+  heroC5a: "Same crater. Two images.",
+  heroC5b: "They don't line up.",
+  heroC5Sub: "Let's fix that",
   heroLoading: "Loading mission footage",
 
   // ---- Landing: 8-layer architecture ----

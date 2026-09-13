@@ -144,6 +144,7 @@ const LayerStack: React.FC<{ active: number; onSelect: (index: number) => void }
 export const ArchitectureLayers: React.FC = () => {
   const { t } = useTranslation();
   const [active, setActive] = useState(0);
+  const sectionRef = useRef<HTMLElement>(null);
   const blockRefs = useRef<Array<HTMLElement | null>>([]);
 
   // The layer whose block crosses the middle band of the viewport is active.
@@ -162,12 +163,35 @@ export const ArchitectureLayers: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
+  // Pause every animation that is offscreen. The visuals run dozens of CSS and SMIL
+  // animations that would otherwise keep the main thread busy while the user is
+  // scrolling the hero, even though nothing of them is painted.
+  useEffect(() => {
+    const setPaused = (el: Element, paused: boolean) => {
+      (el as HTMLElement).dataset.paused = String(paused);
+      el.querySelectorAll('svg').forEach((svg) => (paused ? svg.pauseAnimations() : svg.unpauseAnimations()));
+    };
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((entry) => setPaused(entry.target, !entry.isIntersecting)),
+      { rootMargin: '200px 0px' }
+    );
+    const targets = [
+      ...blockRefs.current,
+      sectionRef.current?.querySelector('[data-stack]') ?? null,
+    ].filter((el): el is HTMLElement => el !== null);
+    targets.forEach((el) => {
+      setPaused(el, true);
+      observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
   const scrollToLayer = (index: number) => {
     blockRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
-    <section id="architecture" className="scroll-mt-16 border-t border-white/10 bg-[#070B0F]">
+    <section ref={sectionRef} id="architecture" className="scroll-mt-16 border-t border-white/10 bg-[#070B0F]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
         <span className="inline-block text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-[#5EB8D6]/10 text-[#5EB8D6] border border-[#5EB8D6]/25">
           {t('archBadge')}
@@ -178,7 +202,7 @@ export const ArchitectureLayers: React.FC = () => {
         <div className="mt-12 grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-10 lg:gap-16">
           {/* Sticky stack (desktop) */}
           <div className="hidden lg:block">
-            <div className="sticky top-24">
+            <div data-stack className="sticky top-24">
               <LayerStack active={active} onSelect={scrollToLayer} />
             </div>
           </div>

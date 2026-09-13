@@ -80,3 +80,51 @@
 @media (prefers-reduced-motion: reduce) {
   .arch-scan, .arch-shimmer, .arch-dash, .arch-ping, .arch-fill, .arch-spin { animation: none; }
 }
+
+/* ---------------- Landing: hero HUD and kinetic captions ---------------- */
+@keyframes heroSheen {
+  to { background-position: -200% 0; }
+}
+
+@keyframes heroGlitch {
+  0%, 86%, 100% { text-shadow: 2px 0 rgba(255, 70, 70, 0.75), -2px 0 rgba(94, 184, 214, 0.75); transform: none; }
+  88% { text-shadow: -4px 0 rgba(255, 70, 70, 0.9), 4px 0 rgba(94, 184, 214, 0.9); transform: translateX(2px) skewX(-8deg); }
+  92% { text-shadow: 5px 0 rgba(255, 70, 70, 0.9), -5px 0 rgba(94, 184, 214, 0.9); transform: translateX(-3px); }
+  95% { text-shadow: 1px 0 rgba(255, 70, 70, 0.6), -1px 0 rgba(94, 184, 214, 0.6); transform: skewX(6deg); }
+}
+
+@keyframes heroBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes heroAlertPulse {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 59, 59, 0.9)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255, 59, 59, 1)); }
+}
+
+.hero-sheen {
+  background: linear-gradient(90deg, #5EB8D6 0%, #ffffff 30%, #5EB8D6 60%, #ffffff 90%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* A text-shadow would paint over the background-clipped gradient. */
+  text-shadow: none;
+  animation: heroSheen 5s linear infinite;
+}
+
+.hero-glitch { display: inline-block; animation: heroGlitch 2.6s steps(1) infinite; }
+.hero-blink { animation: heroBlink 1s steps(1) infinite; }
+.hero-alert-pulse { animation: heroAlertPulse 1.2s ease-in-out infinite; }
+[data-alert="true"] { color: #FF4D4D; animation: heroBlink 0.9s steps(1) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-sheen, .hero-glitch, .hero-blink, .hero-alert-pulse, [data-alert="true"] { animation: none; }
+}
+
+/* Offscreen landing visuals pause their CSS animations (toggled by IntersectionObserver). */
+[data-paused="true"],
+[data-paused="true"] * {
+  animation-play-state: paused !important;
+}
