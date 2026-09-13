@@ -26,7 +26,7 @@ export const ResultsPage: React.FC = () => {
 
       {referenceImage && queryImage ? (
         <AnalysisSummary
-          result={
+            result={
             matchResult || {
               confidence: 92.7,
               status: 'HIGH_MATCH',
@@ -35,6 +35,14 @@ export const ResultsPage: React.FC = () => {
               totalRegions: 100,
               terrainSimilarity: 'HIGH',
               featureCorrespondenceCount: 87,
+              rmse: 1.63,
+maxError: 2.63,
+inlierCount: 16,
+inlierRatio: 0.16,
+spatialCoverage: 0.3125,
+uniformityScore: 0.344,
+subpixelAccuracy: 'NOT_ACHIEVED',
+qualityStatus: 'REJECTED',
               featurePoints: [],
               hexagonGrid: [],
               geospatial: {

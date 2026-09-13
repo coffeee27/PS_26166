@@ -172,6 +172,66 @@ PS-166 Lunar Remote Sensing Analysis Engine v1.0
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
+    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
+      RMSE
+    </span>
+    <span className="text-xl font-bold text-[#17212B]">
+      {result.rmse.toFixed(2)} px
+    </span>
+  </div>
+
+  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
+    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
+      Inlier Ratio
+    </span>
+    <span className="text-xl font-bold text-[#17212B]">
+      {(result.inlierRatio * 100).toFixed(1)}%
+    </span>
+  </div>
+
+  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
+    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
+      Inlier Matches
+    </span>
+    <span className="text-xl font-bold text-[#17212B]">
+      {result.inlierCount}
+    </span>
+  </div>
+
+  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
+    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
+      Spatial Coverage
+    </span>
+    <span className="text-xl font-bold text-[#17212B]">
+      {(result.spatialCoverage * 100).toFixed(1)}%
+    </span>
+  </div>
+</div>
+
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
+  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
+    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
+      Sub-pixel Accuracy
+    </span>
+    <span className="text-sm font-bold text-[#17212B]">
+      {result.subpixelAccuracy}
+    </span>
+  </div>
+
+  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
+    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
+      Quality Status
+    </span>
+    <span className="text-sm font-bold text-[#17212B]">
+      {result.qualityStatus}
+    </span>
+  </div>
+</div>
+        
+        
+        
         <Link
           to="/heatmap"
           className="p-3 border border-[#D5DDE5] hover:border-[#176B87] rounded text-xs font-mono text-[#17212B] bg-[#F8FAFC] hover:bg-[#F0F6F9] transition-colors flex items-center justify-between group"

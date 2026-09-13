@@ -62,6 +62,14 @@ export interface MatchResult {
   totalRegions: number;
   terrainSimilarity: 'HIGH' | 'MEDIUM' | 'LOW';
   featureCorrespondenceCount: number;
+  rmse: number;
+  maxError: number;
+  inlierCount: number;
+  inlierRatio: number;
+  spatialCoverage: number;
+  uniformityScore: number;
+  subpixelAccuracy: 'ACHIEVED' | 'NOT_ACHIEVED';
+  qualityStatus: 'ACCEPTED' | 'REJECTED';
   featurePoints: FeaturePoint[];
   hexagonGrid: HexagonCell[];
   geospatial: GeospatialResult;

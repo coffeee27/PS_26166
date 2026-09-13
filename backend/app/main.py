@@ -69,7 +69,28 @@ async def analyze_images(
 
         matches = bf.match(source_descriptors, reference_descriptors)
         matches = sorted(matches, key=lambda x: x.distance)
-        good_matches = matches[:100]
+        candidate_matches = matches[:300]
+        good_matches = []
+
+        grid_rows = 4
+        grid_cols = 4
+        max_matches_per_cell = 10
+
+        h, w = source_gray.shape[:2]
+        grid_counts = np.zeros((grid_rows, grid_cols), dtype=int)
+
+        for match in candidate_matches:
+           x, y = source_keypoints[match.queryIdx].pt
+
+           col = min(int(x / w * grid_cols), grid_cols - 1)
+           row = min(int(y / h * grid_rows), grid_rows - 1)
+
+           if grid_counts[row, col] < max_matches_per_cell:
+             good_matches.append(match)
+             grid_counts[row, col] += 1
+
+           if len(good_matches) >= 100:
+             break
         
         source_points = np.float32(
             [source_keypoints[m.queryIdx].pt for m in good_matches]
@@ -155,11 +176,9 @@ async def analyze_images(
         },
         "quality_assessment": quality_assessment,
         "registered_image": "/data/uploads/registered.jpg",
-
+        "inlier_matches_image": "/data/uploads/inlier_matches.jpg",
             
-            
-        
-        
+    
  
     }
 }
