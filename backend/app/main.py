@@ -1,9 +1,12 @@
 import os
 from fastapi import FastAPI, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from io import BytesIO
 import cv2
 import numpy as np
+from app.services.geometric_verification import verify_matches
+from app.services.quality_assessment import assess_registration_quality
 
 app = FastAPI(
     title="Lunar Image Matching API",
@@ -11,6 +14,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.mount("/data", StaticFiles(directory="data"), name="data")
 
 @app.get("/health")
 def health_check():
@@ -65,7 +69,28 @@ async def analyze_images(
 
         matches = bf.match(source_descriptors, reference_descriptors)
         matches = sorted(matches, key=lambda x: x.distance)
-        good_matches = matches[:100]
+        candidate_matches = matches[:300]
+        good_matches = []
+
+        grid_rows = 4
+        grid_cols = 4
+        max_matches_per_cell = 10
+
+        h, w = source_gray.shape[:2]
+        grid_counts = np.zeros((grid_rows, grid_cols), dtype=int)
+
+        for match in candidate_matches:
+           x, y = source_keypoints[match.queryIdx].pt
+
+           col = min(int(x / w * grid_cols), grid_cols - 1)
+           row = min(int(y / h * grid_rows), grid_rows - 1)
+
+           if grid_counts[row, col] < max_matches_per_cell:
+             good_matches.append(match)
+             grid_counts[row, col] += 1
+
+           if len(good_matches) >= 100:
+             break
         
         source_points = np.float32(
             [source_keypoints[m.queryIdx].pt for m in good_matches]
@@ -75,41 +100,28 @@ async def analyze_images(
             [reference_keypoints[m.trainIdx].pt for m in good_matches]
         ).reshape(-1, 1, 2)
         
-        H, mask = cv2.findHomography(
-            source_points,
-            reference_points,
-            cv2.RANSAC,
-            5.0
-        )
-        
-        if H is None or mask is None:
-            return {
-                "status": "error",
-                "message": "Could not estimate transformation"
-            }
-            
-        inlier_matches = [
-            match for match, inlier in zip(good_matches, mask.ravel())
-            if inlier
-        ]
-        
-        inlier_count = len(inlier_matches)
-        inlier_ratio = inlier_count / len(good_matches) if good_matches else 0
-        
-        inlier_mask = mask.ravel().astype(bool)
+        H, inlier_matches, geometric_metrics = verify_matches(
+           source_points,
+           reference_points,
+           good_matches,
+           source_gray.shape,
+           source_keypoints
+)
+        match_visualization = cv2.drawMatches(
+          source_image,
+          source_keypoints,
+          reference_image,
+          reference_keypoints,
+          inlier_matches,
+          None,
+          flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS
+)
 
-        src_inliers = source_points[inlier_mask]
-        ref_inliers = reference_points[inlier_mask]
+        cv2.imwrite(
+           os.path.join(upload_dir, "inlier_matches.jpg"),
+           match_visualization
+)
 
-        projected = cv2.perspectiveTransform(src_inliers, H)
-
-        rmse = float(
-            np.sqrt(
-                np.mean(
-                    np.sum((projected - ref_inliers) ** 2, axis=2)
-                )
-            )
-        )
         
         registered_image = cv2.warpPerspective(
             source_image,
@@ -120,13 +132,24 @@ async def analyze_images(
         registered_path = os.path.join(upload_dir, "registered.jpg")
 
         cv2.imwrite(registered_path, registered_image)
+
+        rmse = geometric_metrics["rmse"]
+        max_error = geometric_metrics["max_error"]
+        inlier_count = geometric_metrics["inlier_count"]
+        inlier_ratio = geometric_metrics["inlier_ratio"]
+        spatial_coverage = geometric_metrics["spatial_coverage"]
+        uniformity_score = geometric_metrics["uniformity_score"]
+        quality_assessment = assess_registration_quality(geometric_metrics)
+                
+
         
     
-    except Exception:
-        return {
-            "status": "error",
-            "message": "One or both uploaded files are not valid images"
-        }
+    except Exception as e:
+      print("ERROR:", repr(e))
+      return {
+        "status": "error",
+        "message": str(e)
+    }
 
     return {
     "status": "success",
@@ -144,9 +167,18 @@ async def analyze_images(
         "transformation": H.tolist(),
         "metrics": {
             "rmse": rmse,
+            "max_error": max_error,
             "inlier_count": inlier_count,
-            "inlier_ratio": inlier_ratio
+            "inlier_ratio": inlier_ratio,
+            "spatial_coverage": spatial_coverage,
+            "occupied_cells": geometric_metrics["occupied_cells"],
+             "uniformity_score": uniformity_score
         },
-        "registered_image": "data/uploads/registered.jpg",
+        "quality_assessment": quality_assessment,
+        "registered_image": "/data/uploads/registered.jpg",
+        "inlier_matches_image": "/data/uploads/inlier_matches.jpg",
+            
+    
+ 
     }
 }
