@@ -128,3 +128,114 @@
 [data-paused="true"] * {
   animation-play-state: paused !important;
 }
+
+/* ---------------- Landing: redesigned sections ---------------- */
+@keyframes lpZoom {
+  0% { transform: scale(0.18); opacity: 0; }
+  15% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes lpTilt {
+  0%, 100% { transform: rotateX(58deg) rotateZ(-24deg); }
+  50% { transform: rotateX(34deg) rotateZ(18deg); }
+}
+@keyframes lpWipe {
+  0%, 12% { clip-path: inset(0 100% 0 0); }
+  50%, 62% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 100% 0 0); }
+}
+@keyframes lpSnap {
+  0%, 20% { transform: translate(14%, -10%) rotate(14deg) scale(1.18); opacity: 0.6; }
+  45%, 85% { transform: none; opacity: 1; }
+  100% { transform: translate(14%, -10%) rotate(14deg) scale(1.18); opacity: 0.6; }
+}
+@keyframes lpScanY {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(var(--scan, 220px)); }
+}
+@keyframes lpCrosshair {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(18px, -9px); }
+  50% { transform: translate(7px, 13px); }
+  75% { transform: translate(-12px, 4px); }
+}
+@keyframes lpPop {
+  0%, 8% { transform: scale(0); opacity: 0; }
+  16%, 84% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+@keyframes lpReject {
+  0%, 35% { opacity: 1; }
+  55%, 80% { opacity: 0.12; }
+  100% { opacity: 1; }
+}
+@keyframes lpType {
+  0% { clip-path: inset(0 100% 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+@keyframes lpConverge {
+  0%, 15% { transform: translate(var(--dx), var(--dy)); opacity: 0.35; }
+  60%, 85% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)); opacity: 0.35; }
+}
+@keyframes lpTwinkle {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.9; }
+}
+@keyframes lpMarquee {
+  to { transform: translateX(-50%); }
+}
+@keyframes lpGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(94, 184, 214, 0.55); }
+  60% { box-shadow: 0 0 0 16px rgba(94, 184, 214, 0); }
+}
+@keyframes lpSweep {
+  0% { stroke-dashoffset: var(--len); }
+  60%, 100% { stroke-dashoffset: var(--to, 0); }
+}
+@keyframes lpSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes lpFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.lp-zoom { animation: lpZoom 6s linear infinite; }
+.lp-tilt { animation: lpTilt 9s ease-in-out infinite; transform-style: preserve-3d; }
+.lp-wipe { animation: lpWipe 6s ease-in-out infinite; }
+.lp-snap { animation: lpSnap 5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite; transform-origin: center; }
+.lp-scan { animation: lpScanY 3.2s linear infinite alternate; }
+.lp-crosshair { animation: lpCrosshair 6s ease-in-out infinite; }
+.lp-pop { animation: lpPop 5s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.lp-reject { animation: lpReject 4s ease-in-out infinite; }
+.lp-type { animation: lpType 1.1s steps(28, end) both; }
+.lp-converge { animation: lpConverge 4.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite; transform-box: fill-box; }
+.lp-twinkle { animation: lpTwinkle 3.5s ease-in-out infinite; }
+.lp-marquee { animation: lpMarquee 38s linear infinite; }
+.lp-glow { animation: lpGlow 2.2s ease-out infinite; }
+.lp-sweep { animation: lpSweep 4s ease-out infinite; }
+.lp-spin { animation: lpSpin 40s linear infinite; transform-box: fill-box; transform-origin: center; }
+.lp-float { animation: lpFloat 6s ease-in-out infinite; }
+
+/* Text with only an outline, filled by a sweep when .is-filled is set */
+.lp-outline {
+  -webkit-text-stroke: 1.5px rgba(94, 184, 214, 0.9);
+  color: transparent;
+  background: linear-gradient(90deg, #5EB8D6, #ffffff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  background-size: 0% 100%;
+  background-repeat: no-repeat;
+  transition: background-size 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lp-outline.is-filled { background-size: 100% 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-zoom, .lp-tilt, .lp-wipe, .lp-snap, .lp-scan, .lp-crosshair, .lp-pop, .lp-reject,
+  .lp-type, .lp-converge, .lp-twinkle, .lp-marquee, .lp-glow, .lp-sweep, .lp-spin, .lp-float {
+    animation: none;
+  }
+  .lp-outline { transition: none; }
+}
