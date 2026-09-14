@@ -1,9 +1,10 @@
 import React from 'react';
 import { useTranslation } from '../../../i18n';
-import { ACCENT, AMBER, RED, hash, usePauseOffscreen } from '../utils';
+import { REAL } from '../realData';
+import { ACCENT, AMBER, RED, hash, useInViewOnce, usePauseOffscreen } from '../utils';
 import { SectionHeading } from '../shared';
 
-/* Four instruments, one per evaluation metric. None of them show a measured value. */
+/* Four instruments, one per evaluation metric, each with the value measured on the real Vikram landing-site pair. */
 
 const RmseGauge: React.FC = () => (
   <svg viewBox="0 0 200 200" className="w-full h-full" aria-hidden="true">
@@ -141,11 +142,13 @@ export const MetricsSection: React.FC = () => {
   const { t } = useTranslation();
   const ref = usePauseOffscreen<HTMLElement>();
 
+  const [valuesRef, valuesSeen] = useInViewOnce<HTMLDivElement>(0.3);
+  const m = REAL.metrics;
   const metrics = [
-    { label: t('metricRmseLabel'), desc: t('metricRmseDesc'), Visual: RmseGauge, note: t('metricTargetNote') },
-    { label: t('metricInlierLabel'), desc: t('metricInlierDesc'), Visual: InlierField, note: null },
-    { label: t('metricRatioLabel'), desc: t('metricRatioDesc'), Visual: RatioGauge, note: null },
-    { label: t('metricDistLabel'), desc: t('metricDistDesc'), Visual: CoverageGrid, note: null },
+    { label: t('metricRmseLabel'), desc: t('metricRmseDesc'), Visual: RmseGauge, note: t('metricTargetNote'), value: `${m.holdoutRmsePx.toFixed(2)} px`, sub: `= ${m.holdoutRmseM.toFixed(2)} m` },
+    { label: t('metricInlierLabel'), desc: t('metricInlierDesc'), Visual: InlierField, note: null, value: m.tiePoints.toLocaleString('en-US'), sub: null },
+    { label: t('metricRatioLabel'), desc: t('metricRatioDesc'), Visual: RatioGauge, note: null, value: `${Math.round(m.tiePointRatio * 100)}%`, sub: null },
+    { label: t('metricDistLabel'), desc: t('metricDistDesc'), Visual: CoverageGrid, note: null, value: `${Math.round(m.coverage * 100)}%`, sub: `${t('uniformity').toLowerCase()} ${m.uniformity.toFixed(2)}` },
   ];
 
   return (
@@ -153,8 +156,8 @@ export const MetricsSection: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
         <SectionHeading badge={t('landingMetricsTitle')} title={t('secMetricsTitle')} desc={t('landingMetricsDesc')} />
 
-        <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {metrics.map(({ label, desc, Visual, note }) => (
+        <div ref={valuesRef} className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {metrics.map(({ label, desc, Visual, note, value, sub }, i) => (
             <article
               key={label}
               className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-[#0C1218] to-[#070B0F] p-5 hover:border-[#5EB8D6]/40 transition-colors"
@@ -170,10 +173,18 @@ export const MetricsSection: React.FC = () => {
                   </span>
                 )}
               </div>
-              <p className="mt-1.5 text-xs text-[#8B98A5] leading-relaxed">{desc}</p>
+              <div
+                className={`mt-3 lp-outline text-3xl font-bold font-mono tabular-nums leading-none ${valuesSeen ? 'is-filled' : ''}`}
+                style={{ transitionDelay: `${i * 150}ms` }}
+              >
+                {value}
+              </div>
+              {sub && <div className="mt-1 font-mono text-[10px] text-[#7A8794]">{sub}</div>}
+              <p className="mt-2 text-xs text-[#8B98A5] leading-relaxed">{desc}</p>
             </article>
           ))}
         </div>
+        <p className="mt-6 font-mono text-[11px] leading-relaxed text-[#7A8794]">{t('metricsFootnote')}</p>
       </div>
     </section>
   );

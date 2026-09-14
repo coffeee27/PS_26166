@@ -137,6 +137,10 @@ export const LandingPage: React.FC = () => {
             <span>Space Technology</span>
           </div>
         </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 font-mono text-[10px] leading-relaxed text-[#5F6D7A]">
+          Imagery: Chandrayaan-2 OHRC and IIRS (ISRO / ISSDC) · LRO NAC orthophoto and elevation model (NASA / GSFC / Arizona State University).
+          Engine built with OpenCV, NumPy and SciPy.
+        </div>
       </footer>
     </div>
   );

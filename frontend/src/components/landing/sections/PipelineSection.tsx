@@ -1,47 +1,41 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from '../../../i18n';
 import type { en } from '../../../i18n/en';
-import craterA from '../../../assets/layers/crater-a.webp';
-import craterB from '../../../assets/layers/crater-b.webp';
-import { ACCENT, AMBER, usePauseOffscreen, useScrollProgress } from '../utils';
+import { LUNAR, bandColour } from '../lunarImages';
+import { REAL } from '../realData';
+import { ACCENT, usePauseOffscreen, useScrollProgress } from '../utils';
 import { SectionHeading } from '../shared';
 
 /*
- * Sticky scroll story: one source frame travels through the six stages. The
- * section is tall; its inner stage stays pinned while scroll progress picks
- * the active step, and CSS transitions animate between steps.
+ * Sticky scroll story: the real Chandrayaan-2 OHRC frame of the Vikram landing
+ * site travels through the six engine steps until it lies on the LRO NAC
+ * reference. The section is tall; its inner stage stays pinned while scroll
+ * progress picks the active step, and CSS transitions animate between steps.
  */
 
 type Key = keyof typeof en;
 
 const STAGES: Array<{ name: Key; desc: Key; chip: string }> = [
-  { name: 'pipe1', desc: 'pipe1Desc', chip: '.IMG + .XML' },
-  { name: 'pipe2', desc: 'pipe2Desc', chip: 'POLAR STEREO' },
-  { name: 'pipe3', desc: 'pipe3Desc', chip: 'PHASE EDGES' },
-  { name: 'pipe4', desc: 'pipe4Desc', chip: 'MAGSAC++' },
-  { name: 'pipe5', desc: 'pipe5Desc', chip: '< 1 PX' },
+  { name: 'pipe1', desc: 'pipe1Desc', chip: 'PDS4 / GeoTIFF' },
+  { name: 'pipe2', desc: 'pipe2Desc', chip: '1 M PER PIXEL' },
+  { name: 'pipe3', desc: 'pipe3Desc', chip: 'SIFT + MAGSAC++' },
+  { name: 'pipe4', desc: 'pipe4Desc', chip: 'SUB-PIXEL TIE POINTS' },
+  { name: 'pipe5', desc: 'pipe5Desc', chip: `TESTED: ${REAL.metrics.holdoutRmsePx.toFixed(2)} PX` },
   { name: 'pipe6', desc: 'pipe6Desc', chip: 'GeoTIFF + CSV' },
 ];
 
-/** Keypoints in normalised image coordinates, shared by both frames. */
-const KEYPOINTS: Array<[number, number]> = [
-  [0.38, 0.32],
-  [0.74, 0.2],
-  [0.22, 0.7],
-  [0.62, 0.62],
-  [0.86, 0.8],
-  [0.5, 0.88],
-];
+/** Real tie points of the Vikram run: normalised coordinates in the source (OHRC) and reference (NAC). */
+const KEYPOINTS = [3, 11, 20, 27, 36, 43].map((i) => REAL.tiePoints[i]);
 
 // Side-by-side layout used for correspondence: each frame scaled to 49% and
-// shifted a quarter of the stage width left or right.
+// shifted a quarter of the stage width left (source) or right (reference).
 const SIDE_SCALE = 0.49;
 const SIDE_SHIFT = 0.255;
 const sideX = (u: number, side: -1 | 1) => 0.5 + side * SIDE_SHIFT + (u - 0.5) * SIDE_SCALE;
 const sideY = (v: number) => 0.5 + (v - 0.5) * SIDE_SCALE;
 
 const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
-  const sideBySide = stage === 3 || stage === 4;
+  const sideBySide = stage === 3;
   const transition = 'transform 800ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 600ms ease, filter 600ms ease';
 
   const sourceTransform =
@@ -49,29 +43,29 @@ const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
 
   return (
     <div className="relative w-full aspect-[16/10] overflow-hidden rounded-2xl border border-white/10 bg-black">
-      {/* Reference frame: appears beside the source, then lands on top of it */}
+      {/* Reference frame (LRO NAC): appears beside the source */}
       <div
         className="absolute inset-0"
         style={{
           transition,
           transform: sideBySide ? `translateX(${SIDE_SHIFT * 100}%) scale(${SIDE_SCALE})` : 'none',
-          opacity: sideBySide ? 1 : stage === 5 ? 0.45 : 0,
+          opacity: sideBySide ? 1 : 0,
         }}
       >
-        <img src={craterA} alt="" className="w-full h-full object-cover" />
+        <img src={LUNAR.nacSite} alt="" className="w-full h-full object-cover" />
       </div>
 
-      {/* Source frame */}
+      {/* Source frame (Chandrayaan-2 OHRC) */}
       <div
         className="absolute inset-0"
         style={{
           transition,
           transform: sourceTransform,
           filter: stage === 0 ? 'grayscale(1) contrast(1.4) brightness(0.8)' : 'none',
-          mixBlendMode: stage === 5 ? 'screen' : 'normal',
+          opacity: stage >= 4 ? 0 : 1,
         }}
       >
-        <img src={craterB} alt="" className="w-full h-full object-cover" />
+        <img src={LUNAR.ohrcSite} alt="" className="w-full h-full object-cover" />
         {/* Raw product scanlines */}
         <div
           className="absolute inset-0 transition-opacity duration-500"
@@ -80,7 +74,7 @@ const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
             backgroundImage: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.45) 0 2px, transparent 2px 4px)',
           }}
         />
-        {/* Map graticule */}
+        {/* Common pixel grid */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
@@ -95,21 +89,21 @@ const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
             </g>
           ))}
         </svg>
-        {/* Keypoints */}
+        {/* Features found on the source */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           className="absolute inset-0 w-full h-full transition-opacity duration-500"
-          style={{ opacity: stage >= 2 && stage <= 4 ? 1 : 0 }}
+          style={{ opacity: stage >= 2 && stage <= 3 ? 1 : 0 }}
           aria-hidden="true"
         >
-          {KEYPOINTS.map(([u, v], i) => (
-            <ellipse key={i} cx={u * 100} cy={v * 100} rx="1.6" ry="2.5" fill="none" stroke={ACCENT} strokeWidth="0.6" />
+          {KEYPOINTS.map((point, i) => (
+            <ellipse key={i} cx={point.src[0] * 100} cy={point.src[1] * 100} rx="1.6" ry="2.5" fill="none" stroke={ACCENT} strokeWidth="0.6" />
           ))}
         </svg>
       </div>
 
-      {/* Correspondence lines between the two frames */}
+      {/* Real tie points joining the two frames, coloured by measured error */}
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
@@ -117,14 +111,14 @@ const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
         style={{ opacity: sideBySide ? 1 : 0, transition: 'opacity 400ms ease', transitionDelay: sideBySide ? '600ms' : '0ms' }}
         aria-hidden="true"
       >
-        {KEYPOINTS.map(([u, v], i) => (
+        {KEYPOINTS.map((point, i) => (
           <line
             key={i}
-            x1={sideX(u, -1) * 100}
-            y1={sideY(v) * 100}
-            x2={sideX(u, 1) * 100}
-            y2={sideY(v) * 100}
-            stroke={i === 4 ? AMBER : ACCENT}
+            x1={sideX(point.src[0], -1) * 100}
+            y1={sideY(point.src[1]) * 100}
+            x2={sideX(point.ref[0], 1) * 100}
+            y2={sideY(point.ref[1]) * 100}
+            stroke={bandColour(point.err) === '#176B87' ? ACCENT : bandColour(point.err)}
             strokeWidth="0.35"
             className="arch-dash"
             style={{ strokeDasharray: '1.5 1.5' }}
@@ -132,17 +126,18 @@ const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
         ))}
       </svg>
 
-      {/* Sub-pixel magnifier */}
+      {/* Sub-pixel magnifier over real OHRC pixels */}
       <div
-        className="absolute left-1/2 top-1/2 w-[34%] aspect-square rounded-full border-2 border-[#5EB8D6] bg-black/80 overflow-hidden shadow-[0_0_40px_rgba(94,184,214,0.45)]"
+        className="absolute left-1/2 top-1/2 w-[30%] aspect-square rounded-full border-2 border-[#5EB8D6] bg-black/80 overflow-hidden shadow-[0_0_40px_rgba(94,184,214,0.45)]"
         style={{
           transition: 'transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 400ms ease',
-          opacity: stage === 4 ? 1 : 0,
-          transform: `translate(-50%, -50%) scale(${stage === 4 ? 1 : 0.4})`,
+          transitionDelay: sideBySide ? '900ms' : '0ms',
+          opacity: sideBySide ? 1 : 0,
+          transform: `translate(-50%, -50%) scale(${sideBySide ? 1 : 0.4})`,
         }}
         aria-hidden="true"
       >
-        <img src={craterA} alt="" className="w-full h-full object-cover scale-[3] [image-rendering:pixelated]" />
+        <img src={LUNAR.ohrcBrightCrater} alt="" className="w-full h-full object-cover scale-[3] [image-rendering:pixelated]" />
         <div
           className="absolute inset-0"
           style={{
@@ -158,6 +153,16 @@ const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
         </div>
       </div>
 
+      {/* Model test: real measured error map, blue is good, red is weak */}
+      <div className="absolute inset-0" style={{ transition: 'opacity 600ms ease', opacity: stage === 4 ? 1 : 0 }}>
+        <img src={LUNAR.heatmapLocal} alt="" className="w-full h-full object-cover" />
+      </div>
+
+      {/* Final product: the registered overlay (grey = agree) */}
+      <div className="absolute inset-0" style={{ transition: 'opacity 700ms ease', opacity: stage === 5 ? 1 : 0 }}>
+        <img src={LUNAR.overlaySite} alt="" className="w-full h-full object-cover" />
+      </div>
+
       {/* Registered badge */}
       <div
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
@@ -167,12 +172,15 @@ const StageVisual: React.FC<{ stage: number }> = ({ stage }) => {
           <svg viewBox="0 0 16 16" className="w-4 h-4" aria-hidden="true">
             <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          REGISTERED
+          REGISTERED · {REAL.metrics.holdoutRmseM.toFixed(2)} M
         </div>
       </div>
 
       <div className="absolute left-3 top-3 font-mono text-[10px] font-bold tracking-widest px-2 py-1 rounded bg-black/70 text-[#5EB8D6]">
         {STAGES[stage].chip}
+      </div>
+      <div className="absolute right-3 bottom-3 font-mono text-[9px] font-bold tracking-widest px-2 py-1 rounded bg-black/60 text-white/60">
+        {stage === 3 ? 'OHRC  →  LRO NAC' : stage === 4 ? 'MEASURED ERROR MAP' : stage === 5 ? 'NAC MAGENTA · OHRC GREEN' : 'CHANDRAYAAN-2 OHRC'}
       </div>
     </div>
   );
@@ -275,7 +283,7 @@ export const PipelineSection: React.FC = () => {
             ))}
             <div ref={packetRef} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: '0%' }}>
               <div className="w-8 h-8 rounded-md overflow-hidden border-2 border-white shadow-[0_0_20px_rgba(94,184,214,0.8)]">
-                <img src={craterB} alt="" className="w-full h-full object-cover" />
+                <img src={LUNAR.ohrcCraterField} alt="" className="w-full h-full object-cover" />
               </div>
             </div>
           </div>

@@ -1,33 +1,23 @@
 import React from 'react';
 import { useTranslation } from '../../../i18n';
-import craterA from '../../../assets/layers/crater-a.webp';
-import craterPx10 from '../../../assets/layers/crater-a-px10.png';
-import craterPx40 from '../../../assets/layers/crater-a-px40.png';
+import { LUNAR } from '../lunarImages';
+import { REAL } from '../realData';
 import { ACCENT, AMBER, useInViewOnce, usePauseOffscreen } from '../utils';
 import { SectionHeading } from '../shared';
 
 /*
- * The same crater as each Chandrayaan-2 camera would resolve it. Pixelation is
- * relative and illustrative (the true OHRC-to-IIRS ratio is 320x, which would
- * reduce the crater to a couple of pixels).
+ * Real frames where we have them: OHRC (Vikram landing site) and IIRS (a real
+ * PDS4 cube, one band, detector stripes removed). No TMC-2 frame of the site is
+ * available, so its card shows the OHRC view shrunk to 5 m per pixel.
  */
 
-/** IIRS reflectance-style curve over 0.8-5.0 µm with a dip near 3 µm (OH / H2O). */
-const SPECTRUM = (() => {
-  const points: string[] = [];
-  for (let i = 0; i <= 84; i++) {
-    const um = 0.8 + (i / 84) * 4.2;
-    const base = 0.55 + 0.18 * Math.sin(um * 1.3) - 0.05 * um;
-    const dip = 0.32 * Math.exp(-Math.pow((um - 2.95) / 0.22, 2));
-    const y = 60 - (base - dip) * 70;
-    points.push(`${((i / 84) * 300).toFixed(1)},${y.toFixed(1)}`);
-  }
-  return points.join(' ');
-})();
-const DIP_X = ((2.95 - 0.8) / 4.2) * 300;
+/** Raw signal of the IIRS frame across its bands (uncalibrated, normalised). */
+const SPECTRUM_RANGE = [0.7, 5.0] as const;
+const spectrumX = (um: number) => ((um - SPECTRUM_RANGE[0]) / (SPECTRUM_RANGE[1] - SPECTRUM_RANGE[0])) * 300;
+const SPECTRUM = REAL.iirs.spectrum.map(([um, value]) => `${spectrumX(um).toFixed(1)},${(60 - value * 52).toFixed(1)}`).join(' ');
 
 const SpectrumChart: React.FC = () => (
-  <svg viewBox="0 0 300 76" className="w-full h-auto" role="img" aria-label="IIRS spectrum with an absorption dip near 3 micrometres">
+  <svg viewBox="0 0 300 76" className="w-full h-auto" role="img" aria-label="Raw signal of a real IIRS frame across its bands">
     <defs>
       <linearGradient id="iirs-band" x1="0" x2="1">
         <stop offset="0%" stopColor="#7B5CFF" />
@@ -39,13 +29,12 @@ const SpectrumChart: React.FC = () => (
       <rect key={i} x={i * (300 / 64)} y="66" width={300 / 64 - 1} height="6" fill="url(#iirs-band)" opacity={0.35 + (i % 4) * 0.12} />
     ))}
     <polyline points={SPECTRUM} fill="none" stroke="url(#iirs-band)" strokeWidth="2" />
-    <line x1={DIP_X} y1="8" x2={DIP_X} y2="62" stroke="#fff" strokeOpacity="0.35" strokeDasharray="2 3" />
-    <text x={DIP_X + 5} y="16" className="font-mono" fontSize="8" fontWeight="700" fill="#E6EDF3">~3 µm OH / H₂O</text>
-    <text x="300" y="8" textAnchor="end" className="font-mono" fontSize="7" fill="#7A8794">ILLUSTRATIVE</text>
+    <text x="0" y="8" className="font-mono" fontSize="7.5" fontWeight="700" fill="#E6EDF3">RAW SIGNAL · THIS FRAME</text>
+    <text x="300" y="8" textAnchor="end" className="font-mono" fontSize="7" fill="#7A8794">UNCALIBRATED</text>
     <rect x="0" y="4" width="2" height="68" fill="#fff">
       <animate attributeName="x" values="0;298;0" dur="6s" repeatCount="indefinite" />
     </rect>
-    <text x="0" y="75" className="font-mono" fontSize="7" fill="#7A8794" dy="0">0.8 µm</text>
+    <text x="0" y="75" className="font-mono" fontSize="7" fill="#7A8794" dy="0">0.7 µm</text>
     <text x="300" y="75" textAnchor="end" className="font-mono" fontSize="7" fill="#7A8794">5.0 µm</text>
   </svg>
 );
@@ -63,9 +52,9 @@ export const PayloadsSection: React.FC = () => {
       swathKm: 3,
       spectral: '0.45 – 0.80 µm',
       reference: 'LRO NAC (~0.5 m)',
-      image: craterA,
+      image: LUNAR.ohrcBrightCrater,
       pixelated: false,
-      tint: null as string | null,
+      frame: 'realFrame' as const,
     },
     {
       name: 'TMC-2',
@@ -74,9 +63,9 @@ export const PayloadsSection: React.FC = () => {
       swathKm: 20,
       spectral: '0.5 – 0.8 µm',
       reference: 'SELENE TC (~10 m)',
-      image: craterPx10,
+      image: LUNAR.ohrcAt5m,
       pixelated: true,
-      tint: null,
+      frame: 'simulatedFrame' as const,
     },
     {
       name: 'IIRS',
@@ -84,10 +73,10 @@ export const PayloadsSection: React.FC = () => {
       resolution: '80',
       swathKm: 20,
       spectral: '0.8 – 5.0 µm',
-      reference: 'SELENE TC (~10 m)',
-      image: craterPx40,
+      reference: 'SELENE / LRO maps',
+      image: LUNAR.iirsPatch,
       pixelated: true,
-      tint: 'linear-gradient(135deg, #7B5CFF, #5EB8D6 50%, #E3A93B)',
+      frame: 'realFrame' as const,
     },
   ];
 
@@ -109,9 +98,13 @@ export const PayloadsSection: React.FC = () => {
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   style={sensor.pixelated ? { imageRendering: 'pixelated' } : undefined}
                 />
-                {sensor.tint && (
-                  <div className="absolute inset-0" style={{ background: sensor.tint, mixBlendMode: 'color' }} aria-hidden="true" />
-                )}
+                <span
+                  className={`absolute right-3 top-3 font-mono text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-black/70 ${
+                    sensor.frame === 'realFrame' ? 'text-[#5EB8D6]' : 'text-[#E3A93B]'
+                  }`}
+                >
+                  {t(sensor.frame)}
+                </span>
                 {/* Pushbroom scan line */}
                 <div
                   className="lp-scan absolute inset-x-0 top-0 h-[2px] bg-white shadow-[0_0_16px_4px_rgba(94,184,214,0.8)]"

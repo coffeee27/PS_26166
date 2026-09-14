@@ -6,7 +6,7 @@ import moon from '../../../assets/layers/moon.webp';
 import { usePauseOffscreen } from '../utils';
 import { StarField } from '../shared';
 
-const MARQUEE = ['PS 26166', 'ISRO', 'CHANDRAYAAN-2', 'OHRC', 'TMC-2', 'IIRS', 'LRO NAC', 'SELENE', 'SUB-PIXEL', 'SUN-ANGLE INVARIANT'];
+const MARQUEE = ['PS 26166', 'ISRO', 'CHANDRAYAAN-2', 'OHRC', 'TMC-2', 'IIRS', 'LRO NAC', 'SUB-PIXEL', 'TESTED ON UNSEEN GROUND', 'GeoTIFF'];
 
 export const FinalCtaSection: React.FC = () => {
   const { t } = useTranslation();

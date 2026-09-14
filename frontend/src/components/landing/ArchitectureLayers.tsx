@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { en } from '../../i18n/en';
-import craterA from '../../assets/layers/crater-a.webp';
+import { LUNAR } from './lunarImages';
 import {
   BriefingVisual,
   OrbitVisual,
@@ -58,7 +58,7 @@ const LayerStack: React.FC<{ active: number; onSelect: (index: number) => void }
   return (
     <svg viewBox={`0 0 480 ${bottom + 70}`} className="w-full h-auto" role="img" aria-label={t('archTitle')}>
       <defs>
-        {/* Crater texture sheared onto the isometric plane */}
+        {/* Real OHRC terrain sheared onto the isometric plane */}
         <pattern
           id="arch-plane-texture"
           patternUnits="userSpaceOnUse"
@@ -67,7 +67,7 @@ const LayerStack: React.FC<{ active: number; onSelect: (index: number) => void }
           // Maps the 220px tile's x axis onto the plane's upper edge and y onto its lower edge.
           patternTransform={`matrix(${PLANE_HALF_W / 220} ${-PLANE_HALF_H / 220} ${PLANE_HALF_W / 220} ${PLANE_HALF_H / 220} ${PLANE_CX - PLANE_HALF_W} 0)`}
         >
-          <image href={craterA} width="220" height="220" preserveAspectRatio="xMidYMid slice" />
+          <image href={LUNAR.ohrcCraterField} width="220" height="220" preserveAspectRatio="xMidYMid slice" />
         </pattern>
       </defs>
 

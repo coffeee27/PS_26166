@@ -1,8 +1,7 @@
 import React, { useId } from 'react';
 import { Sun, Eye, Maximize2 } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
-import craterA from '../../../assets/layers/crater-a.webp';
-import craterB from '../../../assets/layers/crater-b.webp';
+import { LUNAR } from '../lunarImages';
 import { ACCENT, AMBER, usePauseOffscreen } from '../utils';
 import { SectionHeading } from '../shared';
 
@@ -25,7 +24,7 @@ const IlluminationVisual: React.FC = () => {
         </clipPath>
       </defs>
       <rect x="-400" y="-400" width="1400" height="1180" fill={`url(#${id}-ground)`} />
-      <image href={craterA} x="-400" y="-400" width="1400" height="1180" preserveAspectRatio="xMidYMid slice" opacity="0.18" />
+      <image href={LUNAR.dtmSunWest} x="-400" y="-400" width="1400" height="1180" preserveAspectRatio="xMidYMid slice" opacity="0.14" />
 
       {/* Rim */}
       <circle cx={cx} cy={cy} r={r + 14} fill="none" stroke="#6B7178" strokeWidth="18" opacity="0.55" />
@@ -43,14 +42,14 @@ const IlluminationVisual: React.FC = () => {
         <line x1={cx - r - 30} y1={cy} x2={cx - r + 6} y2={cy} stroke={AMBER} strokeWidth="1.5" strokeDasharray="3 4" />
       </g>
 
-      {/* Real frames, different light */}
+      {/* Real terrain (LRO elevation model near the Vikram site) lit by a Sun in the east, then the west */}
       <g transform="translate(22, 262)">
-        <image href={craterA} width="92" height="96" preserveAspectRatio="xMidYMid slice" />
-        <image href={craterB} x="100" width="92" height="96" preserveAspectRatio="xMidYMid slice" />
+        <image href={LUNAR.dtmSunEast} width="92" height="96" preserveAspectRatio="xMidYMid slice" />
+        <image href={LUNAR.dtmSunWest} x="100" width="92" height="96" preserveAspectRatio="xMidYMid slice" />
         <rect width="92" height="96" fill="none" stroke="#fff" strokeOpacity="0.3" />
         <rect x="100" width="92" height="96" fill="none" stroke={ACCENT} strokeOpacity="0.7" />
         <text x="0" y="-8" className="font-mono" fontSize="10" fontWeight="700" fill="#8B98A5" letterSpacing="1">
-          SAME TERRAIN · TWO SUNS
+          SAME CRATERS · SUN EAST / SUN WEST
         </text>
       </g>
 
@@ -70,7 +69,7 @@ const IlluminationVisual: React.FC = () => {
 const ViewpointVisual: React.FC = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-[#05080B] [perspective:700px]">
     <div className="lp-tilt relative w-[62%] aspect-square">
-      <img src={craterB} alt="" className="absolute inset-0 w-full h-full object-cover rounded-md opacity-90" />
+      <img src={LUNAR.ohrcSlope} alt="" className="absolute inset-0 w-full h-full object-cover rounded-md opacity-90" />
       <div
         className="absolute inset-0 rounded-md"
         style={{
@@ -100,24 +99,32 @@ const ViewpointVisual: React.FC = () => (
   </div>
 );
 
-/* 3 ---- Scale: an endless zoom through four resolutions ---- */
+/* 3 ---- Scale: an endless zoom through real frames at four resolutions ---- */
 const ScaleVisual: React.FC = () => {
-  const levels = ['80 m', '5 m', '0.5 m', '0.25 m'];
+  const levels = [
+    { label: '86 m', camera: 'IIRS', img: LUNAR.iirsPatch, pixelated: true },
+    { label: '5 m', camera: 'TMC-2 · SIMULATED', img: LUNAR.ohrcAt5m, pixelated: true },
+    { label: '1 m', camera: 'LRO NAC', img: LUNAR.nacCrater, pixelated: false },
+    { label: '0.25 m', camera: 'OHRC', img: LUNAR.ohrcBrightCrater, pixelated: false },
+  ];
   return (
     <div className="absolute inset-0 overflow-hidden bg-black">
-      {levels.map((label, i) => (
+      {levels.map((level, i) => (
         <div
-          key={label}
+          key={level.label}
           className="lp-zoom absolute inset-0 flex items-center justify-center"
           style={{ animationDelay: `${-i * 1.5}s` }}
         >
           <div className="relative w-[70%] aspect-square">
             <img
-              src={i % 2 ? craterB : craterA}
+              src={level.img}
               alt=""
               className="absolute inset-0 w-full h-full object-cover rounded-sm border border-[#5EB8D6]/60"
+              style={level.pixelated ? { imageRendering: 'pixelated' } : undefined}
             />
-            <span className="absolute -top-5 left-0 font-mono text-[10px] font-bold text-[#5EB8D6]">{label} / px</span>
+            <span className="absolute -top-5 left-0 font-mono text-[10px] font-bold text-[#5EB8D6] whitespace-nowrap">
+              {level.label} / px · {level.camera}
+            </span>
           </div>
         </div>
       ))}

@@ -1,24 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Compass, Layers, Crosshair, Grid, ShieldCheck, FileCheck } from 'lucide-react';
+import { Compass, Mountain, Crosshair, Grid, ShieldCheck, FileCheck, Hourglass } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
-import craterA from '../../../assets/layers/crater-a.webp';
-import craterB from '../../../assets/layers/crater-b.webp';
-import edgesA from '../../../assets/layers/crater-a-edges.webp';
-import edgesB from '../../../assets/layers/crater-b-edges.webp';
+import { LUNAR } from '../lunarImages';
+import { REAL } from '../realData';
 import { ACCENT, AMBER, RED, hash, usePauseOffscreen } from '../utils';
 import { SectionHeading } from '../shared';
 
-/* 1 ---- Metadata-driven coarse alignment: read the label, snap the footprint ---- */
+/* 1 ---- Reads real archive files: a real IIRS label, and the frame snapping onto a common pixel grid ---- */
 const MetadataVisual: React.FC = () => {
+  const iirs = REAL.iirs;
   const lines: Array<[string, string]> = [
-    ['<pds:Product_Observational>', ''],
-    ['  <start_date_time>', '2021-03-14T08:22Z'],
-    ['  <sun_azimuth>', '114.6 deg'],
-    ['  <sun_elevation>', '14.2 deg'],
-    ['  <pixel_resolution>', '0.25 m'],
-    ['  <map_projection>', 'POLAR STEREO'],
-    ['  <center_lat_lon>', '-69.37, 32.35'],
-    ['</pds:Product_Observational>', ''],
+    ['<Product_Observational>', ''],
+    ['  <axis_name>', 'BAND LINE SAMPLE'],
+    ['  <elements>', '256  11865  250'],
+    ['  <data_type>', 'UnsignedLSB2'],
+    ['  <pixel_resolution>', `${iirs.gsdM.toFixed(2)} m/pixel`],
+    ['  <upper_left_latitude>', `${iirs.footprint.upper_left[0].toFixed(2)} deg`],
+    ['  <center_wavelength>', `${iirs.bandNm} nm`],
+    ['</Product_Observational>', ''],
   ];
   return (
     <div className="absolute inset-0 grid grid-cols-[1.25fr_1fr] bg-[#05080B]">
@@ -27,8 +26,8 @@ const MetadataVisual: React.FC = () => {
           className="lp-scan absolute inset-x-0 top-3 h-5 bg-[#5EB8D6]/15 border-y border-[#5EB8D6]/30"
           style={{ '--scan': '150px' } as React.CSSProperties}
         />
-        <span className="absolute right-2 bottom-2 font-mono text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-white/5 text-[#7A8794]">
-          EXAMPLE LABEL
+        <span className="absolute right-2 bottom-2 font-mono text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-[#5EB8D6]/10 text-[#5EB8D6]">
+          REAL IIRS LABEL
         </span>
         {lines.map(([key, value], i) => (
           <div key={i} className="relative whitespace-nowrap">
@@ -48,34 +47,33 @@ const MetadataVisual: React.FC = () => {
         />
         <div className="absolute inset-[22%] border border-dashed border-white/25" />
         <div className="lp-snap absolute inset-[22%] overflow-hidden border-2 border-[#5EB8D6] shadow-[0_0_24px_rgba(94,184,214,0.35)]">
-          <img src={craterA} alt="" className="w-full h-full object-cover" />
+          <img src={LUNAR.iirsPatch} alt="" className="w-full h-full object-cover" />
         </div>
-        <span className="absolute left-2 bottom-2 font-mono text-[9px] font-bold text-[#5EB8D6]">COMMON GRID</span>
+        <span className="absolute left-2 bottom-2 font-mono text-[9px] font-bold text-[#5EB8D6]">SAME PIXEL SIZE</span>
       </div>
     </div>
   );
 };
 
-/* 2 ---- Illumination-invariant matching: photo vs structural edges ---- */
-const EdgesVisual: React.FC = () => (
+/* 2 ---- Local terrain correction: real error map, one global model versus global + local ---- */
+const LocalCorrectionVisual: React.FC = () => (
   <div className="absolute inset-0 grid grid-rows-2 gap-px bg-white/10">
     {[
-      { photo: craterA, edges: edgesA, label: 'SUN A' },
-      { photo: craterB, edges: edgesB, label: 'SUN B' },
-    ].map((row, i) => (
+      { image: LUNAR.heatmapGlobal, label: 'ONE GLOBAL MODEL', value: REAL.metrics.globalRmsePx, wipe: false },
+      { image: LUNAR.heatmapLocal, label: '+ LOCAL CORRECTION', value: REAL.metrics.holdoutRmsePx, wipe: true },
+    ].map((row) => (
       <div key={row.label} className="relative overflow-hidden bg-black">
-        <img src={row.photo} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        <img
-          src={row.edges}
-          alt=""
-          className="lp-wipe absolute inset-0 w-full h-full object-cover"
-          style={{ animationDelay: `${i * 0.6}s` }}
-        />
+        {row.wipe && <img src={LUNAR.heatmapGlobal} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+        <img src={row.image} alt="" className={`absolute inset-0 w-full h-full object-cover ${row.wipe ? 'lp-wipe' : ''}`} />
         <span className="absolute left-2 top-2 font-mono text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-black/70 text-white/80">
           {row.label}
         </span>
-        <span className="absolute right-2 bottom-2 font-mono text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-black/70 text-[#5EB8D6]">
-          PHASE EDGES
+        <span
+          className={`absolute right-2 bottom-2 font-mono text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-black/75 ${
+            row.wipe ? 'text-[#5EB8D6]' : 'text-[#E3A93B]'
+          }`}
+        >
+          {row.value.toFixed(2)} PX
         </span>
       </div>
     ))}
@@ -83,18 +81,11 @@ const EdgesVisual: React.FC = () => (
 );
 
 /* 3 ---- Sub-pixel refinement: a crosshair settling between real pixels ---- */
-// 9x9 greyscale samples from the crater rim in crater-a.webp.
-const PATCH = [
-  136, 132, 144, 147, 135, 121, 121, 99, 32, 136, 143, 149, 150, 152, 143, 126, 120, 67, 148, 146, 154, 138, 154, 156,
-  154, 127, 68, 138, 116, 183, 141, 149, 155, 157, 137, 69, 103, 127, 166, 170, 133, 148, 154, 140, 103, 129, 135, 152,
-  189, 138, 141, 150, 134, 111, 61, 64, 165, 169, 140, 146, 141, 133, 124, 39, 44, 144, 117, 159, 151, 139, 120, 103, 123,
-  104, 134, 134, 144, 153, 144, 129, 123,
-];
-
 const SubpixelVisual: React.FC = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-[#05080B]">
     <div className="relative grid grid-cols-9 gap-px bg-white/10 p-px w-[62%] max-w-[190px] aspect-square">
-      {PATCH.map((v, i) => (
+      {/* 9 x 9 real OHRC pixels across a crater rim */}
+      {REAL.rimPatch.map((v, i) => (
         <span key={i} style={{ backgroundColor: `rgb(${v},${v},${v})` }} />
       ))}
       <div className="absolute inset-0 flex items-center justify-center">
@@ -105,20 +96,15 @@ const SubpixelVisual: React.FC = () => (
         </div>
       </div>
     </div>
-    <span className="absolute left-3 bottom-3 font-mono text-[9px] font-bold tracking-widest text-[#7A8794]">1 CELL = 1 PIXEL</span>
+    <span className="absolute left-3 bottom-3 font-mono text-[9px] font-bold tracking-widest text-[#7A8794]">1 CELL = 1 REAL OHRC PIXEL</span>
   </div>
 );
 
-/* 4 ---- Uniform distribution: clumped top-K versus grid quota ---- */
+/* 4 ---- Even spread: real points of the old SIFT baseline versus the engine's grid, same image pair ---- */
 const DistributionVisual: React.FC = () => {
-  const clumped = Array.from({ length: 22 }, (_, i) => ({
-    x: 18 + hash(i) * 26 + (hash(i + 9) - 0.5) * 8,
-    y: 20 + hash(i + 40) * 24,
-  }));
-  const even = Array.from({ length: 16 }, (_, i) => ({
-    x: 9 + (i % 4) * 25 + hash(i + 70) * 8,
-    y: 9 + Math.floor(i / 4) * 25 + hash(i + 90) * 8,
-  }));
+  const toPanel = (points: ReadonlyArray<readonly [number, number]>) => points.map(([u, v]) => ({ x: u * 100, y: v * 100 }));
+  const clumped = toPanel(REAL.baselinePoints);
+  const even = toPanel(REAL.gridSample);
   const panel = (title: string, points: Array<{ x: number; y: number }>, color: string, grid: boolean) => (
     <div className="relative bg-black overflow-hidden">
       <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" aria-hidden="true">
@@ -134,10 +120,10 @@ const DistributionVisual: React.FC = () => {
             key={i}
             cx={pt.x}
             cy={pt.y}
-            r="2.2"
+            r={grid ? 1.3 : 2.2}
             fill={color}
             className="lp-pop"
-            style={{ animationDelay: `${(i * 0.12).toFixed(2)}s` }}
+            style={{ animationDelay: `${((grid ? i * 0.02 : i * 0.12)).toFixed(2)}s` }}
           />
         ))}
       </svg>
@@ -148,8 +134,8 @@ const DistributionVisual: React.FC = () => {
   );
   return (
     <div className="absolute inset-0 grid grid-cols-2 gap-px bg-white/10">
-      {panel('TOP-K', clumped, AMBER, false)}
-      {panel('GRID QUOTA', even, ACCENT, true)}
+      {panel(`OLD SIFT: ${REAL.metrics.baselineInliers} POINTS`, clumped, AMBER, false)}
+      {panel(`ENGINE: ${REAL.metrics.tiePoints.toLocaleString('en-US')} POINTS`, even, ACCENT, true)}
     </div>
   );
 };
@@ -185,14 +171,16 @@ const OutlierVisual: React.FC = () => {
 
 /* 6 ---- Quantitative reporting: the tool writing its outputs ---- */
 const ReportVisual: React.FC = () => {
+  // The output of the real Vikram landing-site run.
+  const m = REAL.metrics;
   const lines: Array<{ text: string; tone: 'cmd' | 'ok' | 'file' | 'dim' }> = [
-    { text: '$ register --src ohrc_strip.xml --ref nac_site.cub', tone: 'cmd' },
-    { text: '✓ labels parsed · common projection', tone: 'ok' },
-    { text: '✓ phase-congruency features', tone: 'ok' },
-    { text: '✓ robust estimation · hold-out check points', tone: 'ok' },
-    { text: '→ registered.tif', tone: 'file' },
-    { text: '→ match_points.csv', tone: 'file' },
-    { text: '→ report.json  (rmse px / m, inliers, coverage)', tone: 'file' },
+    { text: '$ register --ref nac_site.tif --src ohrc_site.tif', tone: 'cmd' },
+    { text: `✓ ${m.putativeMatches.toLocaleString('en-US')} matches · ${m.coarseInliers.toLocaleString('en-US')} kept by MAGSAC++`, tone: 'ok' },
+    { text: `✓ ${m.tiePoints.toLocaleString('en-US')} sub-pixel tie points`, tone: 'ok' },
+    { text: `✓ tested on unseen blocks · ${m.holdoutRmsePx.toFixed(2)} px`, tone: 'ok' },
+    { text: '→ registered.tif  (GeoTIFF)', tone: 'file' },
+    { text: '→ tie_points.csv  (error per point)', tone: 'file' },
+    { text: '→ report.json', tone: 'file' },
   ];
   const color = { cmd: '#E6EDF3', ok: ACCENT, file: AMBER, dim: '#7A8794' };
   const boxRef = useRef<HTMLDivElement>(null);
@@ -235,7 +223,7 @@ export const CapabilitiesSection: React.FC = () => {
 
   const tiles = [
     { icon: <Compass className="w-4 h-4" />, title: t('feat1Title'), desc: t('feat1Desc'), Visual: MetadataVisual, span: 'lg:col-span-2', h: 'h-56' },
-    { icon: <Layers className="w-4 h-4" />, title: t('feat2Title'), desc: t('feat2Desc'), Visual: EdgesVisual, span: 'lg:row-span-2', h: 'h-72 lg:h-auto lg:flex-1' },
+    { icon: <Mountain className="w-4 h-4" />, title: t('feat2Title'), desc: t('feat2Desc'), Visual: LocalCorrectionVisual, span: 'lg:row-span-2', h: 'h-72 lg:h-auto lg:flex-1' },
     { icon: <Crosshair className="w-4 h-4" />, title: t('feat3Title'), desc: t('feat3Desc'), Visual: SubpixelVisual, span: '', h: 'h-56' },
     { icon: <Grid className="w-4 h-4" />, title: t('feat4Title'), desc: t('feat4Desc'), Visual: DistributionVisual, span: '', h: 'h-56' },
     { icon: <ShieldCheck className="w-4 h-4" />, title: t('feat5Title'), desc: t('feat5Desc'), Visual: OutlierVisual, span: '', h: 'h-56' },
@@ -268,6 +256,23 @@ export const CapabilitiesSection: React.FC = () => {
               </div>
             </article>
           ))}
+        </div>
+
+        {/* Roadmap: what is being built next, from the solution document */}
+        <div className="mt-8 rounded-2xl border border-dashed border-[#E3A93B]/40 bg-[#E3A93B]/[0.04] p-5 sm:p-6">
+          <div className="flex items-center gap-2 text-[#E3A93B]">
+            <Hourglass className="w-4 h-4" />
+            <h3 className="text-xs font-bold font-mono uppercase tracking-wider">{t('comingNextTitle')}</h3>
+          </div>
+          <p className="mt-1.5 text-xs sm:text-sm text-[#8B98A5]">{t('comingNextDesc')}</p>
+          <ul className="mt-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {(['comingNext1', 'comingNext2', 'comingNext3', 'comingNext4', 'comingNext5'] as const).map((key, i) => (
+              <li key={key} className="flex gap-2.5 rounded-xl border border-white/10 bg-[#0C1218] p-3">
+                <span className="font-mono text-[10px] font-bold text-[#E3A93B]/80 pt-0.5">{String(i + 1).padStart(2, '0')}</span>
+                <span className="text-xs text-[#C9D3DC] leading-snug">{t(key)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>

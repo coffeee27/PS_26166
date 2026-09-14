@@ -1,13 +1,14 @@
 import React, { useId } from 'react';
-import craterA from '../../assets/layers/crater-a.webp';
-import craterB from '../../assets/layers/crater-b.webp';
 import earth from '../../assets/layers/earth.webp';
 import moon from '../../assets/layers/moon.webp';
+import { LUNAR, bandColour } from './lunarImages';
+import { REAL } from './realData';
 
 /*
  * Animated illustrations for the eight architecture layers on the landing page.
- * Imagery is cropped from the team's Blender render; the two crater tiles show
- * terrain under different lighting, which is exactly the matching problem.
+ * Layers 3-8 use real data: the Vikram landing-site pair (LRO NAC reference,
+ * Chandrayaan-2 OHRC source) and the tie points, errors and outputs of a real
+ * registration run (see realData.ts).
  *
  * Every visual is a 400x250 SVG so overlays line up with the photos. CSS
  * animations live in index.css (.arch-*) and stop under prefers-reduced-motion;
@@ -18,7 +19,6 @@ const W = 400;
 const H = 250;
 const ACCENT = '#5EB8D6';
 const AMBER = '#E3A93B';
-const RED = '#D0605E';
 
 const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -147,11 +147,11 @@ export const WorkstationVisual: React.FC = () => {
   const motion = !reducedMotion();
   const id = useId();
   const panes = [
-    { x: 18, img: craterA, label: 'REF / LRO NAC' },
-    { x: 208, img: craterB, label: 'SRC / OHRC' },
+    { x: 18, img: LUNAR.nacCrater, label: 'REF / LRO NAC' },
+    { x: 208, img: LUNAR.ohrcBrightCrater, label: 'SRC / OHRC' },
   ];
   return (
-    <Frame label="Reference and source frames being scanned">
+    <Frame label="Real reference and source frames of the same crater being scanned">
       <rect width={W} height={H} fill="#05080B" />
       {panes.map((pane, i) => (
         <g key={pane.label}>
@@ -173,6 +173,7 @@ export const WorkstationVisual: React.FC = () => {
       ))}
       <rect x="18" y="222" width="364" height="5" rx="2.5" fill="#fff" fillOpacity="0.08" />
       <rect x="18" y="222" width="364" height="5" rx="2.5" fill={ACCENT} className="arch-fill" style={{ transformBox: 'fill-box' }} />
+      <Tag x={18} y={242} text="VIKRAM LANDING SITE / REAL DATA" color="#8B98A5" />
       <Tag x={382} y={242} text="REGISTERING" color="#8B98A5" anchor="end" />
     </Frame>
   );
@@ -180,41 +181,53 @@ export const WorkstationVisual: React.FC = () => {
 
 /* 4 --------------------------------------------------------------- Heatmap */
 export const HeatmapVisual: React.FC = () => {
-  const cols = 16;
-  const rows = 10;
-  const cw = W / cols;
-  const ch = H / rows;
-  const colorFor = (v: number) => (v > 0.8 ? '#176B87' : v > 0.6 ? AMBER : v > 0.38 ? '#3B82A0' : '#C4D0DC');
+  // Real 8x8 hold-out error per cell over the 2 km site, drawn over the reference.
+  const size = 214;
+  const x0 = 16;
+  const y0 = 18;
+  const cell = size / 8;
+  const legend: Array<[string, string]> = [
+    ['UNDER 0.5 PX', '#176B87'],
+    ['0.5 TO 1 PX', '#5FA8C2'],
+    ['1 TO 2 PX', AMBER],
+    ['NO DATA', '#64748B'],
+  ];
   return (
-    <Frame label="Similarity heatmap over lunar terrain">
-      <image href={craterA} x="0" y="0" width={W} height={H} preserveAspectRatio="xMidYMid slice" />
-      <rect width={W} height={H} fill="#000" opacity="0.35" />
-      {Array.from({ length: rows * cols }, (_, i) => {
-        const c = i % cols;
-        const r = Math.floor(i / cols);
-        const d = Math.hypot((c - 6.5) / 8, (r - 4.2) / 5);
-        const v = Math.max(0, Math.min(1, 1 - d * 0.75 + (hash(i) - 0.5) * 0.35));
+    <Frame label="Measured error in each part of the image">
+      <rect width={W} height={H} fill="#05080B" />
+      <image href={LUNAR.nacSite} x={x0} y={y0} width={size} height={size} />
+      {REAL.cells.map((rmse, i) => {
+        const r = Math.floor(i / 8);
+        const c = i % 8;
         return (
           <rect
             key={i}
-            x={c * cw + 1}
-            y={r * ch + 1}
-            width={cw - 2}
-            height={ch - 2}
+            x={x0 + c * cell + 1}
+            y={y0 + r * cell + 1}
+            width={cell - 2}
+            height={cell - 2}
             rx="2"
-            fill={colorFor(v)}
-            opacity={v < 0.38 ? 0.12 : 0.55}
-            className={v >= 0.38 ? 'arch-shimmer' : undefined}
+            fill={bandColour(rmse)}
+            opacity={rmse === null ? 0.6 : 0.5}
+            className={rmse !== null && rmse >= 1 ? 'arch-shimmer' : undefined}
             style={{ animationDelay: `${(hash(i + 7) * 2.8).toFixed(2)}s` }}
           />
         );
       })}
-      <rect x="262" y="222" width="124" height="18" rx="4" fill="#05080B" fillOpacity="0.85" />
-      {['#C4D0DC', '#3B82A0', AMBER, '#176B87'].map((color, i) => (
-        <rect key={color} x={296 + i * 21} y="228" width="19" height="6" fill={color} />
+      <Tag x={248} y={36} text="MEASURED ERROR" color="#E6EDF3" />
+      {legend.map(([label, color], i) => (
+        <g key={label} transform={`translate(248, ${52 + i * 20})`}>
+          <rect width="12" height="12" rx="2" fill={color} />
+          <text x="20" y="10" className="font-mono" fontSize="9" fill="#8B98A5">
+            {label}
+          </text>
+        </g>
       ))}
-      <text x="270" y="234" className="font-mono" fontSize="7" fill="#8B98A5">LOW</text>
-      <text x="381" y="234" textAnchor="end" className="font-mono" fontSize="7" fill="#8B98A5">HI</text>
+      <text x="248" y="176" className="font-mono" fontSize="22" fontWeight="700" fill="#fff">
+        {REAL.metrics.holdoutRmsePx.toFixed(2)} px
+      </text>
+      <Tag x={248} y={192} text="WHOLE-IMAGE RMSE" color="#8B98A5" />
+      <Tag x={248} y={228} text="REAL RUN / 2 KM SITE" />
     </Frame>
   );
 };
@@ -229,37 +242,39 @@ export const HexVisual: React.FC = () => {
       const a = (Math.PI / 3) * k - Math.PI / 6;
       return `${k ? 'L' : 'M'}${(cx + (r - 1.5) * Math.cos(a)).toFixed(1)},${(cy + (r - 1.5) * Math.sin(a)).toFixed(1)}`;
     }).join('') + 'Z';
-  const cells: Array<{ d: string; fill: string; opacity: number; pulse: boolean }> = [];
+  // Bin a sample of the real tie points (reference frame) into the hexagons.
+  const points = REAL.gridSample.map(([u, v]) => [u * W, v * H]);
+  const cells: Array<{ d: string; count: number; key: string }> = [];
   for (let row = 0; row * stepY < H + r; row++) {
     for (let col = 0; col * hexW < W + hexW; col++) {
       const cx = col * hexW + (row % 2 ? hexW / 2 : 0);
       const cy = row * stepY;
-      // Mostly matched cells, a few uncertain and rare mismatches: the layer's point is even coverage.
-      const h = hash(row * 1009 + col * 131 + 17);
-      const [fill, opacity] =
-        h > 0.97 ? [RED, 0.55] : h > 0.89 ? [AMBER, 0.55] : h > 0.5 ? ['#3B82A0', 0.42] : h > 0.06 ? ['#176B87', 0.6] : ['#64748B', 0.18];
-      cells.push({ d: hexPath(cx, cy), fill, opacity, pulse: h > 0.89 && h <= 0.97 });
+      const count = points.filter(([x, y]) => Math.hypot(x - cx, y - cy) < r).length;
+      cells.push({ d: hexPath(cx, cy), count, key: `${row}-${col}` });
     }
   }
   return (
-    <Frame label="Hexagonal surface matching grid">
-      <image href={craterB} x="0" y="0" width={W} height={H} preserveAspectRatio="xMidYMid slice" />
-      <rect width={W} height={H} fill="#000" opacity="0.3" />
+    <Frame label="Tie points counted in hexagons across the image">
+      <image href={LUNAR.overlaySite} x="0" y="0" width={W} height={H} preserveAspectRatio="xMidYMid slice" />
+      <rect width={W} height={H} fill="#000" opacity="0.35" />
       {cells.map((cell, i) => (
         <path
-          key={i}
+          key={cell.key}
           d={cell.d}
-          fill={cell.fill}
-          fillOpacity={cell.opacity}
+          fill={cell.count === 0 ? '#64748B' : cell.count > 1 ? '#176B87' : '#5FA8C2'}
+          fillOpacity={cell.count === 0 ? 0.15 : 0.5}
           stroke="#fff"
           strokeOpacity="0.18"
           strokeWidth="0.8"
-          className={cell.pulse ? 'arch-shimmer' : undefined}
-          style={cell.pulse ? { animationDelay: `${(hash(i) * 2.8).toFixed(2)}s` } : undefined}
+          className={cell.count > 1 ? 'arch-shimmer' : undefined}
+          style={cell.count > 1 ? { animationDelay: `${(hash(i) * 2.8).toFixed(2)}s` } : undefined}
         />
       ))}
-      <rect x="14" y="14" width="118" height="20" rx="4" fill="#05080B" fillOpacity="0.85" />
-      <Tag x={22} y={27} text="UNIFORM COVERAGE" />
+      {points.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="1.4" fill="#fff" opacity="0.8" />
+      ))}
+      <rect x="14" y="14" width="196" height="20" rx="4" fill="#05080B" fillOpacity="0.85" />
+      <Tag x={22} y={27} text={`${REAL.metrics.tiePoints.toLocaleString('en-US')} TIE POINTS / ${Math.round(REAL.metrics.coverage * 100)}% COVERED`} />
     </Frame>
   );
 };
@@ -268,98 +283,85 @@ export const HexVisual: React.FC = () => {
 export const CorrespondenceVisual: React.FC = () => {
   const left = { x: 12, y: 30, w: 176, h: 190 };
   const right = { x: 212, y: 30, w: 176, h: 190 };
-  // Normalised keypoints inside each tile: [lx, ly, rx, ry, status]
-  const pairs: Array<[number, number, number, number, 'match' | 'maybe' | 'reject']> = [
-    [0.4, 0.34, 0.3, 0.46, 'match'],
-    [0.78, 0.18, 0.84, 0.16, 'match'],
-    [0.2, 0.7, 0.18, 0.78, 'match'],
-    [0.62, 0.62, 0.66, 0.7, 'match'],
-    [0.9, 0.52, 0.93, 0.58, 'match'],
-    [0.48, 0.88, 0.5, 0.92, 'maybe'],
-    [0.12, 0.2, 0.62, 0.3, 'reject'],
-  ];
-  const color = { match: ACCENT, maybe: AMBER, reject: RED } as const;
+  // Every fourth real tie point, coloured by its measured hold-out error.
+  const pairs = REAL.tiePoints.filter((_, i) => i % 4 === 1);
   return (
-    <Frame label="Matched features joined across two images">
+    <Frame label="Real tie points joined across the two images">
       <rect width={W} height={H} fill="#05080B" />
-      <image href={craterA} x={left.x} y={left.y} width={left.w} height={left.h} preserveAspectRatio="xMidYMid slice" />
-      <image href={craterB} x={right.x} y={right.y} width={right.w} height={right.h} preserveAspectRatio="xMidYMid slice" />
+      <image href={LUNAR.nacSite} x={left.x} y={left.y} width={left.w} height={left.h} preserveAspectRatio="none" />
+      <image href={LUNAR.ohrcSite} x={right.x} y={right.y} width={right.w} height={right.h} preserveAspectRatio="none" />
       <rect x={left.x} y={left.y} width={left.w} height={left.h} fill="none" stroke="#fff" strokeOpacity="0.15" />
       <rect x={right.x} y={right.y} width={right.w} height={right.h} fill="none" stroke="#fff" strokeOpacity="0.15" />
-      {pairs.map(([lx, ly, rx, ry, status], i) => {
-        const x1 = left.x + lx * left.w;
-        const y1 = left.y + ly * left.h;
-        const x2 = right.x + rx * right.w;
-        const y2 = right.y + ry * right.h;
+      {pairs.map((pair, i) => {
+        const x1 = left.x + pair.ref[0] * left.w;
+        const y1 = left.y + pair.ref[1] * left.h;
+        const x2 = right.x + pair.src[0] * right.w;
+        const y2 = right.y + pair.src[1] * right.h;
+        const color = bandColour(pair.err);
         return (
           <g key={i}>
-            <line
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={color[status]}
-              strokeWidth={status === 'match' ? 1.4 : 1}
-              strokeOpacity={status === 'reject' ? 0.6 : 0.9}
-              className={status === 'reject' ? undefined : 'arch-dash'}
-              strokeDasharray={status === 'reject' ? '2 4' : undefined}
-            />
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth="1.2" strokeOpacity="0.9" className="arch-dash" />
             {[
               [x1, y1],
               [x2, y2],
             ].map(([cx, cy], k) => (
               <g key={k}>
-                <circle cx={cx} cy={cy} r="4.5" fill="none" stroke={color[status]} strokeWidth="1.5" />
-                {status === 'match' && i % 2 === 0 && (
-                  <circle cx={cx} cy={cy} r="4.5" fill="none" stroke={color[status]} className="arch-ping" style={{ animationDelay: `${i * 0.3}s` }} />
-                )}
+                <circle cx={cx} cy={cy} r="3.5" fill="none" stroke={color} strokeWidth="1.4" />
+                {i % 3 === 0 && <circle cx={cx} cy={cy} r="3.5" fill="none" stroke={color} className="arch-ping" style={{ animationDelay: `${i * 0.3}s` }} />}
               </g>
             ))}
           </g>
         );
       })}
-      <Tag x={12} y={20} text="MATCHED" />
-      <Tag x={76} y={20} text="POTENTIAL" color={AMBER} />
-      <Tag x={146} y={20} text="REJECTED" color={RED} />
+      <Tag x={12} y={20} text="LRO NAC" color="#C9D3DC" />
+      <Tag x={212} y={20} text="CHANDRAYAAN-2 OHRC" />
+      <Tag x={388} y={240} text="COLOUR = MEASURED ERROR" color="#8B98A5" anchor="end" />
     </Frame>
   );
 };
 
-/* 7 ---------------------------------------------------- Geospatial verification */
+/* 7 ---------------------------------------------------- Geometry and location */
 export const GeoVisual: React.FC = () => {
   const id = useId();
-  const cx = 190;
-  const cy = 128;
-  const R = 112;
   return (
-    <Frame label="Target reticle on the lunar surface with coordinates">
+    <Frame label="Map grid over the real reference image of the landing site">
       <rect width={W} height={H} fill="#000" />
-      <Stars count={30} />
-      <image href={moon} x={cx - 128} y={cy - 128} width="256" height="256" style={{ mixBlendMode: 'screen' }} />
-      <clipPath id={`${id}-disc`}>
-        <circle cx={cx} cy={cy} r={R} />
+      <clipPath id={`${id}-map`}>
+        <rect x="16" y="16" width="218" height="218" rx="4" />
       </clipPath>
-      <g clipPath={`url(#${id}-disc)`} stroke="#fff" strokeOpacity="0.14" fill="none" strokeWidth="0.8">
-        {[0.25, 0.55, 0.85].map((f) => (
-          <ellipse key={`m${f}`} cx={cx} cy={cy} rx={R * f} ry={R} />
-        ))}
-        {[-0.66, -0.33, 0, 0.33, 0.66].map((f) => (
-          <line key={`p${f}`} x1={cx - R} y1={cy + R * f} x2={cx + R} y2={cy + R * f} />
-        ))}
+      <g clipPath={`url(#${id}-map)`}>
+        <image href={LUNAR.nacBoulders} x="16" y="16" width="218" height="218" />
+        <g stroke={ACCENT} strokeOpacity="0.35" strokeWidth="0.8">
+          {[1, 2, 3, 4].map((k) => (
+            <g key={k}>
+              <line x1={16 + k * 43.6} y1="16" x2={16 + k * 43.6} y2="234" />
+              <line x1="16" y1={16 + k * 43.6} x2="234" y2={16 + k * 43.6} />
+            </g>
+          ))}
+        </g>
       </g>
+      <rect x="16" y="16" width="218" height="218" rx="4" fill="none" stroke="#fff" strokeOpacity="0.2" />
       <g className="arch-spin">
-        <circle cx="150" cy="150" r="20" fill="none" stroke={ACCENT} strokeWidth="1.2" strokeDasharray="10 6" />
+        <circle cx="125" cy="125" r="20" fill="none" stroke={ACCENT} strokeWidth="1.2" strokeDasharray="10 6" />
       </g>
-      <circle cx="150" cy="150" r="6" fill="none" stroke={ACCENT} className="arch-ping" />
-      <path d="M150,122V140 M150,160V178 M122,150H140 M160,150H178" stroke={ACCENT} strokeWidth="1.5" />
-      <circle cx="150" cy="150" r="2" fill="#fff" />
-      <line x1="170" y1="138" x2="276" y2="70" stroke={ACCENT} strokeOpacity="0.5" strokeDasharray="2 3" />
-      <g transform="translate(276, 40)">
-        <rect width="112" height="72" rx="5" fill="#05080B" fillOpacity="0.9" stroke={ACCENT} strokeOpacity="0.4" />
-        <Tag x={10} y={17} text="TARGET" color="#8B98A5" />
-        <text x="10" y="34" className="font-mono" fontSize="10" fontWeight="700" fill="#E6EDF3">69.37° S</text>
-        <text x="10" y="48" className="font-mono" fontSize="10" fontWeight="700" fill="#E6EDF3">32.35° E</text>
-        <Tag x={10} y={63} text="POLAR STEREO" />
+      <circle cx="125" cy="125" r="6" fill="none" stroke={ACCENT} className="arch-ping" />
+      <path d="M125,97V115 M125,135V153 M97,125H115 M135,125H153" stroke={ACCENT} strokeWidth="1.5" />
+      <circle cx="125" cy="125" r="2" fill="#fff" />
+      <g transform="translate(250, 22)">
+        <rect width="136" height="136" rx="5" fill="#05080B" fillOpacity="0.9" stroke={ACCENT} strokeOpacity="0.4" />
+        <Tag x={10} y={18} text="PIXEL SIZE" color="#8B98A5" />
+        <text x="10" y="36" className="font-mono" fontSize="11" fontWeight="700" fill="#E6EDF3">1.00 m</text>
+        <Tag x={10} y={56} text="MAP PROJECTION" color="#8B98A5" />
+        <text x="10" y="72" className="font-mono" fontSize="9.5" fontWeight="700" fill="#E6EDF3">POLAR STEREO</text>
+        <Tag x={10} y={92} text="SITE" color="#8B98A5" />
+        <text x="10" y="108" className="font-mono" fontSize="9.5" fontWeight="700" fill="#E6EDF3">69.4 S / 32.3 E</text>
+        <Tag x={10} y={126} text="VIKRAM LANDER" />
+      </g>
+      <g transform="translate(250, 172)">
+        <rect width="136" height="58" rx="5" fill="#E3A93B" fillOpacity="0.1" stroke={AMBER} strokeOpacity="0.5" strokeDasharray="3 3" />
+        <Tag x={10} y={18} text="COMING NEXT" color={AMBER} />
+        <text x="10" y="34" className="font-mono" fontSize="8.5" fill="#E6EDF3">Lat / long and sun</text>
+        <text x="10" y="47" className="font-mono" fontSize="8.5" fill="#E6EDF3">angles for every file</text>
       </g>
     </Frame>
   );
@@ -370,91 +372,60 @@ export const ResultsVisual: React.FC = () => {
   const id = useId();
   const motion = !reducedMotion();
   const ringLength = 2 * Math.PI * 22;
+  const m = REAL.metrics;
+  const covered = ringLength * (1 - m.coverage);
   return (
-    <Frame label="Registration report with metrics and exports">
+    <Frame label="Registration report with real metrics and exports">
       <rect width={W} height={H} fill="#05080B" />
-      {/* Registered overlay thumbnail with a swipe divider */}
+      {/* Before / after swipe: the reference alone versus the registered overlay */}
       <clipPath id={`${id}-thumb`}>
         <rect x="16" y="16" width="160" height="218" rx="4" />
       </clipPath>
       <g clipPath={`url(#${id}-thumb)`}>
-        <image href={craterA} x="16" y="16" width="160" height="218" preserveAspectRatio="xMidYMid slice" />
+        <image href={LUNAR.nacSite} x="16" y="16" width="160" height="218" preserveAspectRatio="xMidYMid slice" />
         <clipPath id={`${id}-swipe`}>
           <rect x="16" y="16" width="80" height="218">
             {motion && <animate attributeName="width" values="30;140;30" dur="5s" repeatCount="indefinite" />}
           </rect>
         </clipPath>
-        <image
-          href={craterB}
-          x="16"
-          y="16"
-          width="160"
-          height="218"
-          preserveAspectRatio="xMidYMid slice"
-          clipPath={`url(#${id}-swipe)`}
-          opacity="0.9"
-        />
+        <image href={LUNAR.overlaySite} x="16" y="16" width="160" height="218" preserveAspectRatio="xMidYMid slice" clipPath={`url(#${id}-swipe)`} />
         <rect x="95" y="16" width="2" height="218" fill="#fff">
           {motion && <animate attributeName="x" values="45;155;45" dur="5s" repeatCount="indefinite" />}
         </rect>
       </g>
       <rect x="16" y="16" width="160" height="218" rx="4" fill="none" stroke="#fff" strokeOpacity="0.15" />
 
-      {/* Report card */}
       <Tag x={194} y={30} text="REGISTRATION REPORT" color="#E6EDF3" />
       {[
-        { label: 'RMSE (HOLD-OUT)', y: 52 },
-        { label: 'INLIER COUNT', y: 84 },
+        { label: 'MEASURED RMSE', value: `${m.holdoutRmsePx.toFixed(2)} px`, y: 52, width: 130 * (1 - m.holdoutRmsePx / 2) },
+        { label: 'TIE POINTS', value: m.tiePoints.toLocaleString('en-US'), y: 84, width: 130 * m.tiePointRatio },
       ].map((row, i) => (
         <g key={row.label}>
           <Tag x={194} y={row.y} text={row.label} color="#8B98A5" />
+          <text x="324" y={row.y} textAnchor="end" className="font-mono" fontSize="9" fontWeight="700" fill="#E6EDF3">
+            {row.value}
+          </text>
           <rect x="194" y={row.y + 6} width="130" height="6" rx="3" fill="#fff" fillOpacity="0.08" />
-          <rect
-            x="194"
-            y={row.y + 6}
-            width={i === 0 ? 96 : 118}
-            height="6"
-            rx="3"
-            fill={ACCENT}
-            className="arch-fill"
-            style={{ transformBox: 'fill-box', animationDelay: `${i * 0.4}s` }}
-          />
+          <rect x="194" y={row.y + 6} width={row.width} height="6" rx="3" fill={ACCENT} className="arch-fill" style={{ transformBox: 'fill-box', animationDelay: `${i * 0.4}s` }} />
         </g>
       ))}
-      <g transform="translate(360, 72)">
+      <g transform="translate(362, 72)">
         <circle r="22" fill="none" stroke="#fff" strokeOpacity="0.08" strokeWidth="6" />
-        <circle
-          r="22"
-          fill="none"
-          stroke={AMBER}
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={ringLength}
-          strokeDashoffset={ringLength * 0.22}
-          transform="rotate(-90)"
-        >
-          {motion && (
-            <animate attributeName="stroke-dashoffset" values={`${ringLength};${ringLength * 0.22};${ringLength * 0.22}`} keyTimes="0;0.6;1" dur="3.6s" repeatCount="indefinite" />
-          )}
+        <circle r="22" fill="none" stroke={AMBER} strokeWidth="6" strokeLinecap="round" strokeDasharray={ringLength} strokeDashoffset={covered} transform="rotate(-90)">
+          {motion && <animate attributeName="stroke-dashoffset" values={`${ringLength};${covered};${covered}`} keyTimes="0;0.6;1" dur="3.6s" repeatCount="indefinite" />}
         </circle>
-        <text y="3" textAnchor="middle" className="font-mono" fontSize="7" fontWeight="700" fill="#8B98A5">RATIO</text>
+        <text y="3" textAnchor="middle" className="font-mono" fontSize="8" fontWeight="700" fill="#E6EDF3">
+          {Math.round(m.coverage * 100)}%
+        </text>
+        <text y="36" textAnchor="middle" className="font-mono" fontSize="7" fontWeight="700" fill="#8B98A5">
+          COVERED
+        </text>
       </g>
-      {[0, 1, 2, 3].map((line) => (
-        <rect
-          key={line}
-          x="194"
-          y={120 + line * 13}
-          width={[190, 160, 176, 120][line]}
-          height="6"
-          rx="2"
-          fill="#fff"
-          fillOpacity="0.12"
-          className="arch-shimmer"
-          style={{ animationDelay: `${line * 0.35}s` }}
-        />
+      <Tag x={194} y={126} text="ACCEPTED / SUB-PIXEL" color="#6FCF97" />
+      {[0, 1, 2].map((line) => (
+        <rect key={line} x="194" y={136 + line * 13} width={[190, 160, 176][line]} height="6" rx="2" fill="#fff" fillOpacity="0.12" className="arch-shimmer" style={{ animationDelay: `${line * 0.35}s` }} />
       ))}
-      <Tag x={194} y={114} text="MATCH POINTS .CSV" color="#8B98A5" />
-      {['GeoTIFF', 'CSV', 'REPORT'].map((name, i) => (
+      {['GeoTIFF', 'CSV', 'JSON'].map((name, i) => (
         <g key={name} transform={`translate(${194 + i * 64}, 200)`}>
           <rect width="58" height="24" rx="4" fill={i === 0 ? '#176B87' : '#0C1218'} stroke={ACCENT} strokeOpacity="0.4" />
           <text x="29" y="16" textAnchor="middle" className="font-mono" fontSize="8.5" fontWeight="700" fill="#E6EDF3">
