@@ -17,6 +17,43 @@ def test_16bit_tiff_keeps_full_dynamic_range(tmp_path):
     np.testing.assert_array_equal(image.data, data.astype(np.float32))
 
 
+def test_lzw_compressed_float_geotiff_loads(tmp_path):
+    # LROC orthophotos and DTMs are LZW-compressed float TIFFs.
+    data = np.random.default_rng(0).normal(-2000, 300, (40, 50)).astype(np.float32)
+    path = tmp_path / "dtm.tif"
+    tifffile.imwrite(path, data, compression="lzw")
+
+    image = load_image(path)
+
+    assert image.source_dtype == "float32"
+    np.testing.assert_allclose(image.data, data)
+
+
+def test_geotiff_nodata_becomes_nan_and_pixel_size_is_read(tmp_path):
+    sentinel = np.finfo(np.float32).min  # what LROC DTMs use for missing cells
+    data = np.full((30, 30), 500.0, dtype=np.float32)
+    data[:3, :] = sentinel
+    path = tmp_path / "dtm.tif"
+    tifffile.imwrite(
+        path,
+        data,
+        compression="lzw",
+        extratags=[
+            (33550, "d", 3, (3.0, 3.0, 0.0), True),  # ModelPixelScaleTag: 3 m pixels
+            (33922, "d", 6, (0, 0, 0, -786.0, 612885.0, 0), True),  # ModelTiepointTag
+            (42113, "s", 0, "-3.4028226550889045e+38", True),  # GDAL_NODATA
+        ],
+    )
+
+    image = load_image(path)
+
+    assert np.isnan(image.data[:3]).all()
+    assert np.nanmin(image.data) == 500.0
+    assert image.metadata["nodata_pixels"] == 90
+    assert image.metadata["gsd"] == 3.0
+    assert image.metadata["origin"] == (-786.0, 612885.0)
+
+
 def test_normalize_to_uint8_stretches_percentiles():
     data = np.linspace(1000, 3000, 10000, dtype=np.float32).reshape(100, 100)
     out = normalize_to_uint8(data, 0, 100)

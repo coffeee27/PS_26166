@@ -5,3 +5,4 @@ opencv-python
 numpy
 tifffile
 pds4_tools
+imagecodecs

@@ -59,6 +59,50 @@ def _load_pds4(label_path: Path) -> LunarImage:
     raise ValueError(f"No 2-D image array found in PDS4 label {label_path}")
 
 
+_GDAL_NODATA = 42113
+_MODEL_PIXEL_SCALE = 33550
+_MODEL_TIEPOINT = 33922
+
+
+def _load_tiff(path: Path) -> LunarImage:
+    """Read a (Geo)TIFF, keeping pixel size / origin and turning no-data into NaN."""
+    import tifffile
+
+    metadata: dict = {"format": "TIFF"}
+    nodata = None
+    try:
+        with tifffile.TiffFile(str(path)) as tif:
+            page = tif.pages[0]
+            array = page.asarray()
+            if (tag := page.tags.get(_GDAL_NODATA)) is not None:
+                try:
+                    nodata = float(str(tag.value).strip("\x00 "))
+                except ValueError:
+                    nodata = None
+            if (tag := page.tags.get(_MODEL_PIXEL_SCALE)) is not None:
+                scale_x, scale_y = (float(v) for v in tag.value[:2])
+                metadata["pixel_size"] = (scale_x, scale_y)
+                metadata["gsd"] = scale_x
+            if (tag := page.tags.get(_MODEL_TIEPOINT)) is not None:
+                metadata["origin"] = tuple(float(v) for v in tag.value[3:5])
+    except ValueError:
+        # Compressed TIFFs need imagecodecs; OpenCV decodes LZW/Deflate natively.
+        array = cv2.imread(str(path), cv2.IMREAD_UNCHANGED | cv2.IMREAD_ANYDEPTH)
+        if array is None:
+            raise
+
+    data = _to_single_band(array).astype(np.float32)
+    # LROC DTMs mark missing cells with the most negative float32; treat any such sentinel as missing.
+    invalid = data < -1e30
+    if nodata is not None and np.isfinite(nodata):
+        invalid |= np.isclose(data, nodata, rtol=1e-6, atol=0)
+    if invalid.any():
+        data[invalid] = np.nan
+        metadata["nodata_pixels"] = int(invalid.sum())
+
+    return LunarImage(data=data, source_dtype=str(array.dtype), path=str(path), metadata=metadata)
+
+
 def load_image(path: str | Path) -> LunarImage:
     """Load PNG/JPG/WebP/TIFF (8 or 16-bit) or a PDS4 product (pass the .xml label)."""
     path = Path(path)
@@ -68,9 +112,7 @@ def load_image(path: str | Path) -> LunarImage:
         return _load_pds4(path)
 
     if suffix in (".tif", ".tiff"):
-        import tifffile
-
-        array = tifffile.imread(str(path))
+        return _load_tiff(path)
     else:
         array = cv2.imread(str(path), cv2.IMREAD_UNCHANGED | cv2.IMREAD_ANYDEPTH)
         if array is None:
