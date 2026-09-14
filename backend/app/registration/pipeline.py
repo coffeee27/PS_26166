@@ -178,7 +178,11 @@ def register(
         )
         ref_points, src_points = overlap[refined.valid], refined.source_points[refined.valid]
         if len(ref_points) < config.min_tie_points:
-            raise ValueError(f"Only {len(ref_points)} tie points survived NCC refinement; the images may not overlap")
+            raise ValueError(
+                f"Only {len(ref_points)} of {len(overlap)} tie points could be refined to sub-pixel accuracy "
+                f"(at least {config.min_tie_points} are needed). The images overlap too little, "
+                "or look too different in lighting or detail after the rough alignment."
+            )
 
         # Screen outliers with the best global model: a local model passes through every point, outliers included.
         global_models = tuple(m for m in config.models if not m.local) or config.models

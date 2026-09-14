@@ -31,3 +31,13 @@ def test_matches_recover_similarity_under_brightness_change(lunar_texture, rng):
     assert inliers.sum() >= 40
     expected = matches.reference_points[inliers] @ truth[:, :2].T + truth[:, 2]
     assert np.median(np.hypot(*(matches.source_points[inliers] - expected).T)) < 0.5
+
+
+def test_unrelated_images_are_rejected_with_an_explanation(lunar_texture, rng):
+    import pytest
+
+    unrelated = cv2.GaussianBlur(rng.uniform(0, 255, lunar_texture.shape).astype(np.float32), (0, 0), 2.0)
+    matches = match_features(lunar_texture, unrelated, scale=1.0)
+
+    with pytest.raises(ValueError, match="may not show the same area"):
+        robust_homography(matches)

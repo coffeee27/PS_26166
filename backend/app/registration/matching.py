@@ -85,15 +85,38 @@ def match_features(
     return MatchSet(reference_points, source_points, np.float64([score for _, score in kept]))
 
 
-def robust_homography(matches: MatchSet, threshold: float = 3.0) -> tuple[np.ndarray, np.ndarray]:
-    """MAGSAC++ reference -> source homography and the inlier mask."""
-    if len(matches.reference_points) < 4:
-        raise ValueError(f"Need at least 4 matches for a homography, got {len(matches.reference_points)}")
+MIN_CONSISTENT_MATCHES = 20
+"""Unrelated lunar images still produce up to ~10 matches that agree by chance, so fewer than this is rejected."""
+
+_PAIR_HINT = (
+    "The two images may not show the same area, may overlap too little, "
+    "or may differ too much in lighting or scale. Try images of the same site with similar sun angle and known pixel size."
+)
+
+
+def robust_homography(
+    matches: MatchSet, threshold: float = 3.0, min_inliers: int = MIN_CONSISTENT_MATCHES
+) -> tuple[np.ndarray, np.ndarray]:
+    """MAGSAC++ reference -> source homography and the inlier mask.
+
+    Raises ValueError with a user-facing explanation when too few matches agree
+    on one alignment, instead of returning a registration built on chance matches.
+    """
+    found = len(matches.reference_points)
+    if found < min_inliers:
+        raise ValueError(
+            f"Only {found} matching features were found between the two images "
+            f"(at least {min_inliers} are needed). {_PAIR_HINT}"
+        )
     H, mask = cv2.findHomography(
         matches.reference_points, matches.source_points, cv2.USAC_MAGSAC, threshold, maxIters=10000, confidence=0.9999
     )
-    if H is None:
-        raise ValueError("Robust homography estimation failed")
+    consistent = 0 if mask is None else int(mask.sum())
+    if H is None or consistent < min_inliers:
+        raise ValueError(
+            f"Found {found} candidate matches, but only {consistent} agree on one alignment "
+            f"(at least {min_inliers} are needed). {_PAIR_HINT}"
+        )
     return H, mask.ravel().astype(bool)
 
 
