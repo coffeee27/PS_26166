@@ -3,6 +3,6 @@ uvicorn
 python-multipart
 opencv-python
 numpy
+scipy
 tifffile
-pds4_tools
 imagecodecs

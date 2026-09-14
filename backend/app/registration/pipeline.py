@@ -2,13 +2,13 @@
 
 1. Resolution alignment: the source is resampled to the reference ground
    sample distance when both are known.
-2. Coarse: SIFT matches on downsampled images, MAGSAC++ homography, refitted on
-   grid-balanced inliers (see matching.py).
+2. Coarse: SIFT matches on downsampled images (long side capped for long
+   strips), MAGSAC++ homography, refitted on grid-balanced inliers (matching.py).
 3. Fine, repeated `passes` times: a regular grid of reference tie points is
-   refined by NCC through the current mapping, gross outliers are removed with a
-   MAD test, and the geometric model with the lowest spatial-block hold-out RMSE
-   becomes the mapping for the next pass. The second pass matters near the image
-   edges, where a homography can be several pixels off.
+   cropped to the overlap with the source, refined by NCC through the current
+   mapping, screened for gross outliers with a MAD test on the best global model,
+   and the geometric model with the lowest spatial-block hold-out RMSE (global or
+   polynomial plus local grid correction) becomes the mapping for the next pass.
 
 All accuracy figures are held-out errors in reference pixels.
 """
@@ -31,6 +31,7 @@ from .subpixel import refine_correspondences
 @dataclass
 class RegistrationConfig:
     match_scale: float = 0.5
+    match_max_side: int = 3000  # coarse images are shrunk further so long strips stay tractable
     match_ratio: float = 0.8
     magsac_threshold: float = 3.0  # reference pixels
     balance_grid: tuple[int, int] = (8, 8)
@@ -78,6 +79,46 @@ class RegistrationResult:
         }
 
 
+def lattice_mapping(mapping: Predict, shape: tuple[int, int], step: float = 4.0, margin: float = 64.0) -> Predict:
+    """Evaluate a smooth mapping once on a lattice and interpolate it with cubic B-splines.
+
+    NCC refinement queries the mapping for thousands of small windows; this makes
+    each query cheap for any model. The mappings used here vary on scales of tens
+    of pixels, so a 4 px lattice reproduces them to within a few thousandths of a pixel.
+    """
+    from scipy.ndimage import map_coordinates, spline_filter
+
+    height, width = shape[:2]
+    # Spline accuracy drops within a couple of nodes of the lattice edge, so pad beyond the requested margin.
+    margin = margin + 4 * step
+    xs = np.arange(-margin, width + margin + step, step)
+    ys = np.arange(-margin, height + margin + step, step)
+    gx, gy = np.meshgrid(xs, ys)
+    values = mapping(np.column_stack([gx.ravel(), gy.ravel()])).reshape(len(ys), len(xs), 2)
+    coefficients = [spline_filter(values[..., c], order=3, mode="nearest") for c in range(2)]
+
+    def predict(points: np.ndarray) -> np.ndarray:
+        points = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+        coords = [(points[:, 1] + margin) / step, (points[:, 0] + margin) / step]
+        return np.column_stack([map_coordinates(c, coords, order=3, mode="nearest", prefilter=False) for c in coefficients])
+
+    return predict
+
+
+def overlap_mask(grid: np.ndarray, mapping: Predict, reference: np.ndarray, source_shape: tuple[int, int], margin: float) -> np.ndarray:
+    """Grid points whose reference pixel is valid and whose mapped position lies inside the source image."""
+    mapped = mapping(grid)
+    height, width = source_shape[:2]
+    inside = (
+        np.isfinite(mapped).all(axis=1)
+        & (mapped[:, 0] >= margin) & (mapped[:, 0] <= width - 1 - margin)
+        & (mapped[:, 1] >= margin) & (mapped[:, 1] <= height - 1 - margin)
+    )
+    rows = np.clip(np.round(grid[:, 1]).astype(int), 0, reference.shape[0] - 1)
+    cols = np.clip(np.round(grid[:, 0]).astype(int), 0, reference.shape[1] - 1)
+    return inside & np.isfinite(reference[rows, cols])
+
+
 def _tie_point_grid(shape: tuple[int, int], step: int, margin: int) -> np.ndarray:
     height, width = shape
     xs, ys = np.meshgrid(np.arange(margin, width - margin, step), np.arange(margin, height - margin, step))
@@ -104,7 +145,9 @@ def register(
     stats["source_resampled_shape"] = list(source.shape)
 
     # Coarse stage.
-    matches = match_features(reference, source, scale=config.match_scale, ratio=config.match_ratio)
+    largest_side = max(*reference.shape, *source.shape)
+    match_scale = min(config.match_scale, config.match_max_side / largest_side)
+    matches = match_features(reference, source, scale=match_scale, ratio=config.match_ratio)
     H, inliers = robust_homography(matches, config.magsac_threshold)
     balanced = balance_by_grid(
         matches.reference_points[inliers], reference.shape, config.balance_grid, config.balance_per_cell,
@@ -120,26 +163,34 @@ def register(
         coarse_inliers=int(inliers.sum()),
         coarse_balanced=int(len(balanced)),
         coarse_seconds=round(time.perf_counter() - started, 2),
+        match_scale=round(match_scale, 4),
     )
 
     # Fine stage.
     grid = _tie_point_grid(reference.shape, config.grid_step, config.patch_size // 2 + config.search_radius)
     selection: ModelSelection | None = None
     for current_pass in range(config.passes):
+        # Overlap crop: only refine where the current mapping lands inside the source and the reference has data.
+        overlap = grid[overlap_mask(grid, mapping, reference, source.shape, config.patch_size / 2)]
         refined = refine_correspondences(
-            reference, source, grid, mapping,
+            reference, source, overlap, mapping,
             patch_size=config.patch_size, search_radius=config.search_radius, min_score=config.min_ncc,
         )
-        ref_points, src_points = grid[refined.valid], refined.source_points[refined.valid]
+        ref_points, src_points = overlap[refined.valid], refined.source_points[refined.valid]
         if len(ref_points) < config.min_tie_points:
             raise ValueError(f"Only {len(ref_points)} tie points survived NCC refinement; the images may not overlap")
 
-        first = select_model(ref_points, src_points, reference.shape, config.models, config.holdout_blocks)
-        keep = mad_inliers(residuals(first.predict, ref_points, src_points), config.outlier_mads)
+        # Screen outliers with the best global model: a local model passes through every point, outliers included.
+        global_models = tuple(m for m in config.models if not m.local) or config.models
+        screening = select_model(ref_points, src_points, reference.shape, global_models, config.holdout_blocks)
+        keep = mad_inliers(residuals(screening.predict, ref_points, src_points), config.outlier_mads)
         ref_points, src_points = ref_points[keep], src_points[keep]
         selection = select_model(ref_points, src_points, reference.shape, config.models, config.holdout_blocks)
-        mapping = selection.predict
+        if current_pass + 1 < config.passes:
+            reach = config.patch_size + 3 * config.search_radius
+            mapping = lattice_mapping(selection.predict, reference.shape, margin=float(reach))
         stats[f"pass{current_pass + 1}"] = {
+            "overlap_points": int(len(overlap)),
             "refined": int(refined.valid.sum()),
             "outliers": int((~keep).sum()),
             "model": selection.name,
@@ -147,7 +198,8 @@ def register(
         }
 
     assert selection is not None
-    stats["grid_points"] = int(len(grid))
+    stats["grid_points"] = int(len(overlap))  # grid points inside the overlap, the denominator of the tie-point ratio
+    stats["overlap_fraction"] = round(len(overlap) / max(len(grid), 1), 3)
     stats["total_seconds"] = round(time.perf_counter() - started, 2)
     fitted = selection.predict
 

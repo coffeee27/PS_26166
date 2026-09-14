@@ -8,11 +8,13 @@ export const formatMetres = (value: number | null | undefined, digits = 2) =>
 
 export const formatPercent = (fraction: number, digits = 0) => `${(fraction * 100).toFixed(digits)}%`;
 
-/** "polynomial-4" -> "Polynomial, degree 4" */
+/** "polynomial-4" -> "Polynomial, degree 4"; "polynomial-4+local" -> "Polynomial, degree 4 + local grid" */
 export function modelLabel(model: string): string {
-  const [kind, degree] = model.split('-');
+  const local = model.endsWith('+local');
+  const [kind, degree] = model.replace('+local', '').split('-');
   const name = kind.charAt(0).toUpperCase() + kind.slice(1);
-  return degree ? `${name}, degree ${degree}` : name;
+  const base = degree ? `${name}, degree ${degree}` : name;
+  return local ? `${base} + local grid` : base;
 }
 
 export type ErrorBand = 'excellent' | 'subpixel' | 'caution' | 'poor' | 'none';
@@ -57,12 +59,4 @@ export function downloadReport(result: RegistrationResult) {
   const { tiePoints, cells, ...summary } = result;
   const report = { ...summary, cells, tiePointCount: tiePoints.length };
   download(`registration_report_${result.jobId}.json`, JSON.stringify(report, null, 2), 'application/json');
-}
-
-export function downloadTiePointsCsv(result: RegistrationResult) {
-  const rows = ['reference_x,reference_y,source_x,source_y,holdout_error_px'];
-  for (const p of result.tiePoints) {
-    rows.push([p.reference[0], p.reference[1], p.source[0], p.source[1], p.errorPx ?? ''].join(','));
-  }
-  download(`tie_points_${result.jobId}.csv`, rows.join('\n'), 'text/csv');
 }

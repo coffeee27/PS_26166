@@ -59,6 +59,8 @@ interface ApiAnalyzeResponse {
     inlier_matches_image: string;
     reference_preview_image: string;
     source_preview_image: string;
+    registered_geotiff: string;
+    tie_points_csv: string;
     engine: {
       model: string;
       model_rmse_px: Record<string, number>;
@@ -71,6 +73,7 @@ interface ApiAnalyzeResponse {
       source_gsd: number | null;
       reference_shape: [number, number];
       source_shape: [number, number];
+      georeferenced: boolean;
       cell_grid: [number, number];
       cells: ApiCell[];
       error_heatmap_scale_px: [number, number];
@@ -123,6 +126,7 @@ function toResult(response: ApiAnalyzeResponse, processingTimeMs: number): Regis
     sourceGsd: engine.source_gsd,
     referenceShape: engine.reference_shape,
     sourceShape: engine.source_shape,
+    georeferenced: engine.georeferenced,
     putativeMatches: engine.putative_matches,
     coarseInliers: engine.coarse_inliers,
     engineSeconds: engine.total_seconds,
@@ -138,6 +142,8 @@ function toResult(response: ApiAnalyzeResponse, processingTimeMs: number): Regis
       tiePoints: url(result.inlier_matches_image),
       referencePreview: url(result.reference_preview_image),
       sourcePreview: url(result.source_preview_image),
+      registeredGeotiff: url(result.registered_geotiff),
+      tiePointsCsv: url(result.tie_points_csv),
     },
   };
 }

@@ -31,6 +31,9 @@ export interface RegistrationImages {
   tiePoints: string;
   referencePreview: string;
   sourcePreview: string;
+  /** Float32 GeoTIFF on the reference grid, with the reference's georeferencing. */
+  registeredGeotiff: string;
+  tiePointsCsv: string;
 }
 
 export interface RegistrationResult {
@@ -62,6 +65,7 @@ export interface RegistrationResult {
   sourceGsd: number | null;
   referenceShape: [number, number]; // [height, width]
   sourceShape: [number, number];
+  georeferenced: boolean;
 
   putativeMatches: number;
   coarseInliers: number;

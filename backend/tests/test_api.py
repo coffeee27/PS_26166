@@ -52,6 +52,10 @@ def test_analyze_registers_pair_and_keeps_response_shape(client, tmp_path, lunar
     assert np.median(np.hypot(*(match[:, 1] - expected).T)) < 0.2
 
     job_dir = tmp_path / body["job_id"]
+    assert result["registered_geotiff"].endswith("registered.tif") and (job_dir / "registered.tif").is_file()
+    table = np.loadtxt(job_dir / "tie_points.csv", delimiter=",", skiprows=1)
+    assert table.shape == (result["metrics"]["inlier_count"], 5)  # PNG input: no map coordinates
+
     for name in ("registered.png", "overlay.jpg", "error_heatmap.jpg", "tie_points.jpg"):
         assert (job_dir / name).is_file()
         assert result[{"registered.png": "registered_image", "overlay.jpg": "overlay_image",

@@ -56,3 +56,33 @@ def test_resamples_source_to_reference_resolution(lunar_texture):
     expected = (query + np.array([-3.0, 3.0]) + 0.5) * 2 - 0.5
     assert np.allclose(result.mapping(query), expected, atol=0.3)
     assert result.holdout_rmse_m is not None and result.holdout_rmse_m < 0.3
+
+
+def test_lattice_mapping_reproduces_smooth_mapping():
+    from app.registration.pipeline import lattice_mapping
+
+    def mapping(points):
+        x, y = points.T
+        return np.column_stack([x + 3 * np.sin(x / 90.0), y + 0.002 * x * y / 10])
+
+    fast = lattice_mapping(mapping, (500, 560), step=4.0, margin=40.0)
+    rng = np.random.default_rng(3)
+    points = np.column_stack([rng.uniform(-40, 600, 5000), rng.uniform(-40, 540, 5000)])  # inside the lattice
+    assert np.abs(fast(points) - mapping(points)).max() < 0.01
+
+
+def test_partial_overlap_restricts_tie_points_and_scales_coarse_matching(lunar_texture):
+    reference = lunar_texture
+    height, width = reference.shape
+    # The source covers only the right ~70% of the reference.
+    shift = np.float32([[1, 0, -150.0], [0, 1, 4.0]])
+    source = cv2.warpAffine(reference, shift, (width - 150, height), flags=cv2.INTER_CUBIC)
+
+    config = RegistrationConfig(match_max_side=250, grid_step=24, min_tie_points=30)
+    result = register(reference, source, config=config)
+
+    assert result.stats["match_scale"] == round(250 / max(width, height), 4)  # below the default 0.5
+    assert 0.5 < result.stats["overlap_fraction"] < 0.8
+    assert result.reference_points[:, 0].min() >= 150  # nothing refined where the source has no pixels
+    query = np.array([[300.0, 200.0], [450.0, 300.0]])
+    assert np.allclose(result.mapping(query), query + np.array([-150.0, 4.0]), atol=0.2)

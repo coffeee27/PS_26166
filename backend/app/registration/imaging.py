@@ -40,28 +40,118 @@ def _to_single_band(array: np.ndarray) -> np.ndarray:
     return array
 
 
-def _load_pds4(label_path: Path) -> LunarImage:
-    """Read the first 2-D array in a PDS4 product described by its XML label."""
-    import pds4_tools  # imported lazily: only needed for archive products
+_PDS4_DTYPES = {
+    "UnsignedByte": "u1", "SignedByte": "i1",
+    "UnsignedLSB2": "<u2", "SignedLSB2": "<i2", "UnsignedMSB2": ">u2", "SignedMSB2": ">i2",
+    "UnsignedLSB4": "<u4", "SignedLSB4": "<i4", "UnsignedMSB4": ">u4", "SignedMSB4": ">i4",
+    "IEEE754LSBSingle": "<f4", "IEEE754MSBSingle": ">f4", "IEEE754LSBDouble": "<f8", "IEEE754MSBDouble": ">f8",
+}
+_PDS4_MISSING = ("missing_constant", "invalid_constant", "unknown_constant", "not_applicable_constant")
+_FOOTPRINT_CORNERS = ("upper_left", "upper_right", "lower_left", "lower_right")
 
-    structures = pds4_tools.read(str(label_path), quiet=True, lazy_load=True)
-    for structure in structures:
-        if not structure.is_array():
-            continue
-        array = np.asarray(structure.data)
-        if array.ndim >= 2:
-            return LunarImage(
-                data=_to_single_band(array).astype(np.float32),
-                source_dtype=str(array.dtype),
-                path=str(label_path),
-                metadata={"format": "PDS4", "structure": structure.id},
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _child(element, name: str):
+    return next((c for c in element if _local(c.tag) == name), None)
+
+
+def _text(element, name: str) -> str | None:
+    found = _child(element, name)
+    return None if found is None or found.text is None else found.text.strip()
+
+
+def _load_pds4(label_path: Path, band: int | None = None) -> LunarImage:
+    """Read one image plane of a PDS4 product (e.g. Chandrayaan-2 OHRC, TMC-2, IIRS) from its XML label.
+
+    The array is memory-mapped, so a single band of a multi-gigabyte spectral cube
+    is read without loading the rest. `band` is the 0-based index along a BAND axis
+    (default: the middle band). Pixel size, footprint corners and band wavelength
+    are taken from the label when present.
+    """
+    import xml.etree.ElementTree as ElementTree
+
+    root = ElementTree.parse(label_path).getroot()
+    for file_area in (e for e in root.iter() if _local(e.tag) == "File_Area_Observational"):
+        file_name = _text(_child(file_area, "File"), "file_name")
+        for array in (e for e in file_area if _local(e.tag).startswith("Array_") and int(_text(e, "axes") or 0) >= 2):
+            element = _child(array, "Element_Array")
+            dtype = np.dtype(_PDS4_DTYPES[_text(element, "data_type")])
+            axes = sorted(
+                ((int(_text(a, "sequence_number")), (_text(a, "axis_name") or "").upper(), int(_text(a, "elements")))
+                 for a in array if _local(a.tag) == "Axis_Array"),
             )
-    raise ValueError(f"No 2-D image array found in PDS4 label {label_path}")
+            shape = tuple(n for _, _, n in axes)
+            order = "C" if (_text(array, "axis_index_order") or "Last Index Fastest") == "Last Index Fastest" else "F"
+            cube = np.memmap(label_path.parent / file_name, dtype=dtype, mode="r", offset=int(_text(array, "offset") or 0), shape=shape, order=order)
+
+            metadata: dict = {"format": "PDS4", "array": _local(array.tag), "axes": [name for _, name, _ in axes]}
+            names = [name for _, name, _ in axes]
+            if cube.ndim == 3:
+                band_axis = names.index("BAND") if "BAND" in names else int(np.argmin(shape))
+                band = shape[band_axis] // 2 if band is None else band
+                if not 0 <= band < shape[band_axis]:
+                    raise ValueError(f"Band {band} out of range 0..{shape[band_axis] - 1}")
+                plane = np.take(cube, band, axis=band_axis)
+                metadata["band"] = band
+                bins = [b for b in array.iter() if _local(b.tag) == "Band_Bin"]
+                if band < len(bins) and (wavelength := _text(bins[band], "center_wavelength")):
+                    metadata["center_wavelength_nm"] = float(wavelength)
+            elif cube.ndim == 2:
+                plane = cube
+            else:
+                continue
+
+            data = np.asarray(plane, dtype=np.float32)
+            scale, offset = _text(element, "scaling_factor"), _text(element, "value_offset")
+            invalid = np.zeros(data.shape, dtype=bool)
+            constants = _child(array, "Special_Constants")
+            for name in _PDS4_MISSING:
+                if constants is not None and (value := _text(constants, name)) is not None:
+                    invalid |= data == float(value)
+            if scale or offset:
+                data = data * float(scale or 1.0) + float(offset or 0.0)
+            if invalid.any():
+                data[invalid] = np.nan
+                metadata["nodata_pixels"] = int(invalid.sum())
+
+            elements = {_local(e.tag): e for e in root.iter()}
+            if (resolution := elements.get("pixel_resolution")) is not None and resolution.text:
+                factor = 1000.0 if (resolution.get("unit") or "").lower().startswith("km") else 1.0
+                metadata["gsd"] = float(resolution.text) * factor
+            footprint = {}
+            for corner in _FOOTPRINT_CORNERS:
+                lat, lon = elements.get(f"{corner}_latitude"), elements.get(f"{corner}_longitude")
+                if lat is not None and lon is not None:
+                    footprint[corner] = (float(lat.text), float(lon.text))
+            if footprint:
+                metadata["footprint_deg"] = footprint
+            for key in ("sun_elevation", "sun_azimuth", "solar_incidence", "solar_azimuth"):
+                if (angle := elements.get(key)) is not None and angle.text:
+                    metadata[f"{key}_deg"] = float(angle.text)
+
+            return LunarImage(data=data, source_dtype=str(dtype), path=str(label_path), metadata=metadata)
+    raise ValueError(f"No image array found in PDS4 label {label_path}")
 
 
 _GDAL_NODATA = 42113
 _MODEL_PIXEL_SCALE = 33550
 _MODEL_TIEPOINT = 33922
+_GEO_KEY_DIRECTORY = 34735
+# Tags that carry georeferencing; copied unchanged onto products on the same pixel grid.
+_GEOTIFF_TAGS = (_MODEL_PIXEL_SCALE, _MODEL_TIEPOINT, 34264, _GEO_KEY_DIRECTORY, 34736, 34737)
+_GT_RASTER_TYPE_KEY = 1025
+_RASTER_PIXEL_IS_POINT = 2
+
+
+def _raster_type(geo_keys) -> int | None:
+    keys = [int(v) for v in geo_keys]
+    for i in range(4, len(keys) - 3, 4):
+        if keys[i] == _GT_RASTER_TYPE_KEY:
+            return keys[i + 3]
+    return None
 
 
 def _load_tiff(path: Path) -> LunarImage:
@@ -84,7 +174,13 @@ def _load_tiff(path: Path) -> LunarImage:
                 metadata["pixel_size"] = (scale_x, scale_y)
                 metadata["gsd"] = scale_x
             if (tag := page.tags.get(_MODEL_TIEPOINT)) is not None:
+                metadata["tiepoint_pixel"] = tuple(float(v) for v in tag.value[0:2])
                 metadata["origin"] = tuple(float(v) for v in tag.value[3:5])
+            if (tag := page.tags.get(_GEO_KEY_DIRECTORY)) is not None:
+                metadata["pixel_is_point"] = _raster_type(tag.value) == _RASTER_PIXEL_IS_POINT
+            geotags = [(t.code, t.dtype, t.count, t.value) for t in page.tags.values() if t.code in _GEOTIFF_TAGS]
+            if geotags:
+                metadata["geotiff_tags"] = geotags
     except ValueError:
         # Compressed TIFFs need imagecodecs; OpenCV decodes LZW/Deflate natively.
         array = cv2.imread(str(path), cv2.IMREAD_UNCHANGED | cv2.IMREAD_ANYDEPTH)
@@ -103,13 +199,13 @@ def _load_tiff(path: Path) -> LunarImage:
     return LunarImage(data=data, source_dtype=str(array.dtype), path=str(path), metadata=metadata)
 
 
-def load_image(path: str | Path) -> LunarImage:
-    """Load PNG/JPG/WebP/TIFF (8 or 16-bit) or a PDS4 product (pass the .xml label)."""
+def load_image(path: str | Path, band: int | None = None) -> LunarImage:
+    """Load PNG/JPG/WebP/TIFF (8 or 16-bit) or a PDS4 product (pass the .xml label; `band` selects a cube plane)."""
     path = Path(path)
     suffix = path.suffix.lower()
 
     if suffix == ".xml":
-        return _load_pds4(path)
+        return _load_pds4(path, band)
 
     if suffix in (".tif", ".tiff"):
         return _load_tiff(path)
@@ -124,6 +220,35 @@ def load_image(path: str | Path) -> LunarImage:
         path=str(path),
         metadata={"format": suffix.lstrip(".").upper()},
     )
+
+
+def write_geotiff(path: str | Path, data: np.ndarray, metadata: dict | None = None) -> None:
+    """Write a float32 TIFF with NaN as no-data, carrying the georeferencing of `metadata` if present.
+
+    Use the metadata of the image whose pixel grid `data` is on (for a registered
+    product, the reference image).
+    """
+    import tifffile
+
+    extratags = [(_GDAL_NODATA, "s", 0, "nan", True)]
+    for code, dtype, count, value in (metadata or {}).get("geotiff_tags", []):
+        extratags.append((code, dtype, 0 if isinstance(value, str) else count, value, True))
+    tifffile.imwrite(str(path), np.asarray(data, dtype=np.float32), compression="zlib", extratags=extratags)
+
+
+def pixel_to_map(points: np.ndarray, metadata: dict) -> np.ndarray | None:
+    """Map coordinates (projection units, usually metres) of pixel-centre coordinates, or None if not georeferenced."""
+    if "pixel_size" not in metadata or "origin" not in metadata:
+        return None
+    points = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+    scale_x, scale_y = metadata["pixel_size"]
+    origin_x, origin_y = metadata["origin"]
+    tie_i, tie_j = metadata.get("tiepoint_pixel", (0.0, 0.0))
+    # PixelIsArea tie points refer to the pixel corner; pixel centres sit half a pixel inside.
+    centre = 0.0 if metadata.get("pixel_is_point") else 0.5
+    map_x = origin_x + (points[:, 0] + centre - tie_i) * scale_x
+    map_y = origin_y - (points[:, 1] + centre - tie_j) * scale_y
+    return np.column_stack([map_x, map_y])
 
 
 def normalize_to_uint8(

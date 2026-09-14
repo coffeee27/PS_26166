@@ -1,10 +1,10 @@
 import React from 'react';
 import type { RegistrationResult } from '../../types/matching';
 import { useTranslation } from '../../i18n';
-import { FileCheck, FileJson, FileSpreadsheet, Printer, Cpu, ArrowRight, Target, Crosshair, Grid3x3, Gauge, ExternalLink } from 'lucide-react';
+import { FileCheck, FileJson, FileSpreadsheet, Printer, Cpu, ArrowRight, Target, Crosshair, Grid3x3, Gauge, ExternalLink, Map } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MetricTile, QualityBanner } from './RegistrationSummary';
-import { downloadReport, downloadTiePointsCsv, formatMetres, formatPercent, formatPx, modelLabel } from '../../utils/registration';
+import { downloadReport, formatMetres, formatPercent, formatPx, modelLabel } from '../../utils/registration';
 
 export const AnalysisSummary: React.FC<{ result: RegistrationResult }> = ({ result }) => {
   const { t } = useTranslation();
@@ -39,10 +39,19 @@ export const AnalysisSummary: React.FC<{ result: RegistrationResult }> = ({ resu
             <FileJson className="w-4 h-4" />
             <span>{t('downloadReport')}</span>
           </button>
-          <button type="button" onClick={() => downloadTiePointsCsv(result)} className={`${buttonClass} bg-[#176B87] hover:bg-[#3B82A0] text-white shadow`}>
+          <a href={result.images.tiePointsCsv} download={`tie_points_${result.jobId}.csv`} className={`${buttonClass} bg-[#176B87] hover:bg-[#3B82A0] text-white shadow`}>
             <FileSpreadsheet className="w-4 h-4" />
             <span>{t('downloadTiePoints')}</span>
-          </button>
+          </a>
+          <a
+            href={result.images.registeredGeotiff}
+            download={`registered_${result.jobId}.tif`}
+            title={result.georeferenced ? t('geotiffGeoreferenced') : t('geotiffPixelOnly')}
+            className={`${buttonClass} bg-[#176B87] hover:bg-[#3B82A0] text-white shadow`}
+          >
+            <Map className="w-4 h-4" />
+            <span>{t('downloadGeotiff')}</span>
+          </a>
           <button type="button" onClick={() => window.print()} className={`${buttonClass} bg-[#F4F7FA] hover:bg-[#E9EEF3] text-[#17212B] border border-[#D5DDE5]`}>
             <Printer className="w-4 h-4" />
             <span>{t('printSummary')}</span>
