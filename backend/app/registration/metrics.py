@@ -39,18 +39,36 @@ def holdout_rmse(
     fit: FitFunction,
     folds: int = 5,
     seed: int = 0,
+    groups: np.ndarray | None = None,
 ) -> HoldoutReport:
-    """K-fold cross-validated error: each point is predicted by a model that never saw it."""
+    """K-fold cross-validated error: each point is predicted by a model that never saw it.
+
+    With `groups` (e.g. a spatial block id per point) whole groups are held out
+    together, one per fold. Dense tie-point grids need this: with random folds a
+    held-out point always has near-identical neighbours in the training set, which
+    hides overfitting.
+    """
     ref = np.asarray(reference_points, dtype=np.float64)
     src = np.asarray(source_points, dtype=np.float64)
     count = len(ref)
-    if count < folds * 2:
-        raise ValueError(f"Need at least {folds * 2} correspondences for {folds}-fold hold-out")
+    if groups is None:
+        if count < folds * 2:
+            raise ValueError(f"Need at least {folds * 2} correspondences for {folds}-fold hold-out")
+        order = np.random.default_rng(seed).permutation(count)
+        splits = np.array_split(order, folds)
+    else:
+        groups = np.asarray(groups).reshape(-1)
+        if len(groups) != count:
+            raise ValueError("groups must have one entry per correspondence")
+        splits = [np.flatnonzero(groups == group) for group in np.unique(groups)]
+        if len(splits) < 2:
+            raise ValueError("Need at least 2 groups for grouped hold-out")
+        folds = len(splits)
 
-    order = np.random.default_rng(seed).permutation(count)
+    all_indices = np.arange(count)
     errors = np.full(count, np.nan)
-    for held_out in np.array_split(order, folds):
-        train = np.setdiff1d(order, held_out, assume_unique=True)
+    for held_out in splits:
+        train = np.setdiff1d(all_indices, held_out, assume_unique=True)
         predict = fit(ref[train], src[train])
         errors[held_out] = point_errors(predict(ref[held_out]), src[held_out])
 

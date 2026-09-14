@@ -45,6 +45,32 @@ def test_holdout_exposes_overfitting_that_fit_rmse_hides(rng):
     assert report.rmse > 20.0  # but fails on points it never saw
 
 
+def test_grouped_holdout_catches_leak_between_neighbouring_points(rng):
+    # Every tie point has near neighbours with the same local error, like a dense grid on real terrain.
+    sites = rng.uniform(0, 1000, (60, 2))
+    site_error = rng.normal(0, 3.0, (60, 2))
+    reference = np.repeat(sites, 4, axis=0) + rng.normal(0, 0.5, (240, 2))
+    source = reference + np.repeat(site_error, 4, axis=0)
+    blocks = (reference[:, 1] // 250) * 4 + reference[:, 0] // 250
+
+    def fit_local_offset(train_reference, train_source):
+        """Copies the displacement of the nearest training point: a very local model."""
+
+        def predict(points):
+            nearest = np.argmin(((points[:, None, :] - train_reference[None, :, :]) ** 2).sum(-1), axis=1)
+            return points + (train_source - train_reference)[nearest]
+
+        return predict
+
+    random_folds = holdout_rmse(reference, source, fit_local_offset)
+    spatial_blocks = holdout_rmse(reference, source, fit_local_offset, groups=blocks)
+
+    # Random folds leave a neighbour in the training set, which hides how badly the model generalises.
+    assert spatial_blocks.rmse > 3.0
+    assert random_folds.rmse * 4 < spatial_blocks.rmse
+    assert spatial_blocks.folds == len(np.unique(blocks))
+
+
 def test_spatial_coverage_even_versus_clumped():
     shape = (800, 800)
     centres = (np.arange(8) + 0.5) * 100
