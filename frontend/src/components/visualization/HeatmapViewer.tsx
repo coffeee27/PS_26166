@@ -1,173 +1,140 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
+import type { GridCell, RegistrationResult } from '../../types/matching';
 import { useTranslation } from '../../i18n';
 import { Activity, Crosshair } from 'lucide-react';
+import { BAND_COLOURS, errorBand, formatPx } from '../../utils/registration';
 
 interface HeatmapViewerProps {
-  referenceImage: string;
-  queryImage: string;
-  confidence: number;
+  result: RegistrationResult;
 }
 
-export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({
-  referenceImage,
-  queryImage,
-  confidence,
-}) => {
+type View = 'grid' | 'heatmap';
+
+// Matches the backend's OpenCV COLORMAP_JET rendering of the smooth heatmap.
+const JET_GRADIENT = 'linear-gradient(90deg, #00007F, #0000FF, #00FFFF, #FFFF00, #FF0000, #7F0000)';
+
+export const HeatmapViewer: React.FC<HeatmapViewerProps> = ({ result }) => {
   const { t } = useTranslation();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hoverPos, setHoverPos] = useState<{ x: number; y: number; val: number } | null>(null);
+  const [view, setView] = useState<View>('grid');
+  const [hovered, setHovered] = useState<GridCell | null>(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const [rows, cols] = result.cellGrid;
+  const [height, width] = result.referenceShape;
+  const [scaleMin, scaleMax] = result.heatmapScalePx;
 
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
+  const counts = useMemo(() => {
+    const tally = { excellent: 0, subpixel: 0, caution: 0, poor: 0, none: 0 };
+    for (const cell of result.cells) tally[cell.tiePoints ? errorBand(cell.rmsePx) : 'none'] += 1;
+    return tally;
+  }, [result.cells]);
 
-    ctx.fillStyle = '#17212B';
-    ctx.fillRect(0, 0, width, height);
-
-    const rows = 20;
-    const cols = 28;
-    const cellW = width / cols;
-    const cellH = height / rows;
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const distFromCenter = Math.sqrt(Math.pow((r - 10) / 10, 2) + Math.pow((c - 14) / 14, 2));
-        let val = Math.max(0, 1 - distFromCenter * 0.7);
-        val = Math.min(1, Math.max(0, val + (Math.sin(r * 3 + c * 5) * 0.15)));
-
-        let color = 'rgba(196, 208, 220, 0.25)';
-        if (val > 0.8) {
-          color = 'rgba(23, 107, 135, 0.9)';
-        } else if (val > 0.6) {
-          color = 'rgba(227, 169, 59, 0.85)';
-        } else if (val > 0.35) {
-          color = 'rgba(59, 130, 160, 0.65)';
-        }
-
-        ctx.fillStyle = color;
-        ctx.fillRect(c * cellW, r * cellH, cellW - 1, cellH - 1);
-      }
-    }
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(width * 0.45, height * 0.48, width * 0.25, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(width * 0.45, height * 0.48, width * 0.14, 0, Math.PI * 2);
-    ctx.stroke();
-  }, [confidence]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor(e.clientX - rect.left);
-    const y = Math.floor(e.clientY - rect.top);
-    const normalizedVal = Math.min(99.9, Math.max(12.0, (1 - (Math.abs(x - 250) + Math.abs(y - 180)) / 400) * 100)).toFixed(1);
-    setHoverPos({ x, y, val: parseFloat(normalizedVal) });
-  };
+  const legend = [
+    { band: 'excellent' as const, label: t('bandExcellent') },
+    { band: 'subpixel' as const, label: t('bandSubpixel') },
+    { band: 'caution' as const, label: t('bandCaution') },
+    { band: 'poor' as const, label: t('bandPoor') },
+    { band: 'none' as const, label: t('emptyCells') },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-[#D5DDE5] rounded-lg p-3 shadow-sm">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E9EEF3] mb-2 font-mono text-xs">
-            <span className="font-bold text-[#17212B] uppercase">{t('referenceImageTitle')}</span>
-            <span className="text-[10px] text-[#5B6875] bg-[#E9EEF3] px-1.5 py-0.5 rounded">REF-01</span>
-          </div>
-          <div className="relative aspect-video bg-[#17212B] rounded overflow-hidden border border-[#D5DDE5]">
-            <img src={referenceImage} alt="Reference Lunar Surface" className="w-full h-full object-cover" />
-            <div className="absolute top-2 left-2 text-[9px] font-mono text-white bg-black/60 px-1.5 py-0.5 rounded">
-              CAM-A (LRO-NAC)
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-[#D5DDE5] rounded-lg p-3 shadow-sm">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E9EEF3] mb-2 font-mono text-xs">
-            <span className="font-bold text-[#17212B] uppercase">{t('queryImageTitle')}</span>
-            <span className="text-[10px] text-[#176B87] bg-[#176B87]/10 px-1.5 py-0.5 rounded">QRY-02</span>
-          </div>
-          <div className="relative aspect-video bg-[#17212B] rounded overflow-hidden border border-[#D5DDE5]">
-            <img src={queryImage} alt="Query Lunar Surface" className="w-full h-full object-cover" />
-            <div className="absolute top-2 left-2 text-[9px] font-mono text-white bg-black/60 px-1.5 py-0.5 rounded">
-              CAM-B (OHRC)
-            </div>
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="xl:col-span-2 bg-white border border-[#D5DDE5] rounded-lg p-3 shadow-sm space-y-3">
+        <div className="flex items-center justify-between font-mono text-xs">
+          <span className="font-bold text-[#176B87] uppercase flex items-center">
+            <Activity className="w-3.5 h-3.5 mr-1" />
+            {t('heatmapTitle')}
+          </span>
+          <div className="flex rounded border border-[#D5DDE5] overflow-hidden text-[10px]">
+            {(['grid', 'heatmap'] as View[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setView(option)}
+                className={`px-2.5 py-1 transition-colors ${
+                  view === option ? 'bg-[#176B87] text-white' : 'bg-[#F4F7FA] text-[#5B6875] hover:text-[#17212B]'
+                }`}
+              >
+                {option === 'grid' ? t('gridView') : t('heatmapView')}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="bg-white border border-[#D5DDE5] rounded-lg p-3 shadow-sm">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E9EEF3] mb-2 font-mono text-xs">
-            <span className="font-bold text-[#176B87] uppercase flex items-center">
-              <Activity className="w-3.5 h-3.5 mr-1 text-[#176B87]" />
-              SIMILARITY HEATMAP
-            </span>
-            <span className="text-[10px] font-bold text-[#2E7D5B] bg-[#EEF7F2] px-1.5 py-0.5 rounded">
-              {confidence}% MATCH
-            </span>
-          </div>
-          <div className="relative aspect-video bg-[#17212B] rounded overflow-hidden border border-[#D5DDE5]">
-            <canvas
-              ref={canvasRef}
-              width={500}
-              height={360}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={() => setHoverPos(null)}
-              className="w-full h-full cursor-crosshair object-cover"
-            />
-            {hoverPos && (
-              <div className="absolute bottom-2 left-2 bg-black/85 text-white font-mono text-[10px] p-1.5 rounded border border-[#176B87] flex items-center space-x-2">
-                <Crosshair className="w-3 h-3 text-[#E3A93B]" />
-                <span>X: {hoverPos.x} Y: {hoverPos.y}</span>
-                <span className="text-[#E3A93B]">Score: {hoverPos.val}%</span>
-              </div>
-            )}
-          </div>
+        <div className="relative bg-[#17212B] rounded overflow-hidden border border-[#D5DDE5] mx-auto" style={{ aspectRatio: `${width} / ${height}`, width: `min(100%, ${Math.round((640 * width) / height)}px)` }}>
+          <img
+            src={view === 'grid' ? result.images.referencePreview : result.images.errorHeatmap}
+            alt={t('heatmapTitle')}
+            className="absolute inset-0 w-full h-full object-fill"
+          />
+          {view === 'grid' && (
+            <svg
+              className="absolute inset-0 w-full h-full"
+              viewBox={`0 0 ${cols} ${rows}`}
+              preserveAspectRatio="none"
+              onMouseLeave={() => setHovered(null)}
+            >
+              {result.cells.map((cell) => {
+                const band = cell.tiePoints ? errorBand(cell.rmsePx) : 'none';
+                const isHovered = hovered?.row === cell.row && hovered?.col === cell.col;
+                return (
+                  <rect
+                    key={`${cell.row}-${cell.col}`}
+                    x={cell.col + 0.03}
+                    y={cell.row + 0.03}
+                    width={0.94}
+                    height={0.94}
+                    fill={BAND_COLOURS[band]}
+                    fillOpacity={band === 'none' ? 0.55 : isHovered ? 0.7 : 0.42}
+                    stroke={isHovered ? '#FFFFFF' : BAND_COLOURS[band]}
+                    strokeWidth={isHovered ? 0.05 : 0.02}
+                    className="cursor-crosshair"
+                    onMouseEnter={() => setHovered(cell)}
+                  />
+                );
+              })}
+            </svg>
+          )}
+          {view === 'grid' && (
+            <div className="absolute bottom-2 left-2 bg-black/85 text-white font-mono text-[10px] p-1.5 rounded border border-[#176B87] flex items-center space-x-2">
+              <Crosshair className="w-3 h-3 text-[#E3A93B]" />
+              {hovered ? (
+                <span>
+                  {t('cellLabel')} R{hovered.row + 1}·C{hovered.col + 1} · {hovered.tiePoints} {t('hexCellPoints')} ·{' '}
+                  <span className="text-[#E3A93B]">{hovered.tiePoints ? formatPx(hovered.rmsePx) : t('cellNoPoints')}</span>
+                </span>
+              ) : (
+                <span>{t('cellInspectorHint')}</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="bg-white border border-[#D5DDE5] rounded-lg p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3 font-mono text-xs">
-          <span className="font-bold text-[#17212B] uppercase tracking-wider">
-            {t('similarityScale')}
-          </span>
-          <span className="text-[#5B6875] text-[11px]">
-            {t('lowSimilarity')} ──────────────── {t('highSimilarity')}
-          </span>
+      <div className="space-y-4">
+        <div className="bg-white border border-[#D5DDE5] rounded-lg p-4 shadow-sm space-y-3 font-mono text-xs">
+          <span className="font-bold text-[#17212B] uppercase tracking-wider block">{t('gridView')}</span>
+          {legend.map(({ band, label }) => (
+            <div key={band} className="flex items-center justify-between">
+              <span className="flex items-center space-x-2 text-[#5B6875]">
+                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: BAND_COLOURS[band] }} />
+                <span>{label}</span>
+              </span>
+              <span className="font-bold text-[#17212B]">
+                {counts[band]} / {rows * cols}
+              </span>
+            </div>
+          ))}
         </div>
 
-        <div className="h-4 rounded overflow-hidden flex shadow-inner border border-[#D5DDE5]">
-          <div className="flex-1 bg-[#C4D0DC]" title={t('legendPaleBlue')} />
-          <div className="flex-1 bg-[#3B82A0]" title={t('legendMutedTeal')} />
-          <div className="flex-1 bg-[#E3A93B]" title={t('legendAmberGold')} />
-          <div className="flex-1 bg-[#176B87]" title={t('legendDeepTeal')} />
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs font-mono">
-          <div className="flex items-center space-x-2">
-            <span className="w-3 h-3 rounded-sm bg-[#C4D0DC] border border-gray-400" />
-            <span className="text-[#5B6875]">{t('legendPaleBlue')}</span>
+        <div className="bg-white border border-[#D5DDE5] rounded-lg p-4 shadow-sm space-y-2 font-mono text-xs">
+          <span className="font-bold text-[#17212B] uppercase tracking-wider block">{t('errorScale')}</span>
+          <div className="h-3 rounded border border-[#D5DDE5]" style={{ background: JET_GRADIENT }} />
+          <div className="flex justify-between text-[10px] text-[#5B6875]">
+            <span>{formatPx(scaleMin, 1)}</span>
+            <span>{formatPx((scaleMin + scaleMax) / 2, 1)}</span>
+            <span>≥ {formatPx(scaleMax, 1)}</span>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="w-3 h-3 rounded-sm bg-[#3B82A0]" />
-            <span className="text-[#5B6875]">{t('legendMutedTeal')}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="w-3 h-3 rounded-sm bg-[#E3A93B]" />
-            <span className="text-[#5B6875]">{t('legendAmberGold')}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="w-3 h-3 rounded-sm bg-[#176B87]" />
-            <span className="text-[#5B6875]">{t('legendDeepTeal')}</span>
-          </div>
+          <p className="text-[11px] text-[#7E8B9B] pt-1">{t('holdoutNote')}</p>
         </div>
       </div>
     </div>

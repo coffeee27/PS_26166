@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from '../../i18n';
 import { SidebarNavItem } from './SidebarNavItem';
 import { LanguageToggle } from '../common/LanguageToggle';
+import { useMatchingContext } from '../../context/MatchingContext';
 import {
   Compass,
   Layers,
@@ -23,6 +24,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
+  const { backendOnline } = useMatchingContext();
 
   const navItems = [
     { to: '/overview', label: t('navOverview'), icon: <Compass className="w-4 h-4" /> },
@@ -100,10 +102,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <div className="bg-white p-2.5 rounded border border-[#D5DDE5] space-y-1.5 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-[#5B6875]">{t('analysisEngine')}</span>
-              <span className="flex items-center text-[10px] font-bold text-[#2E7D5B] bg-[#EEF7F2] px-1.5 py-0.5 rounded border border-[#2E7D5B]/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#2E7D5B] mr-1 animate-pulse" />
-                {t('statusOnline')}
-              </span>
+              {backendOnline === false ? (
+                <span className="flex items-center text-[10px] font-bold text-[#B94A48] bg-[#FDF5F5] px-1.5 py-0.5 rounded border border-[#B94A48]/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#B94A48] mr-1" />
+                  {t('statusOffline')}
+                </span>
+              ) : (
+                <span className="flex items-center text-[10px] font-bold text-[#2E7D5B] bg-[#EEF7F2] px-1.5 py-0.5 rounded border border-[#2E7D5B]/30">
+                  <span className={`w-1.5 h-1.5 rounded-full bg-[#2E7D5B] mr-1 ${backendOnline ? 'animate-pulse' : 'opacity-40'}`} />
+                  {backendOnline ? t('statusOnline') : t('statusChecking')}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-1 border-t border-[#F0F4F8]">
@@ -124,15 +133,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Demo banner badge */}
-        <div className="bg-[#FFFDF5] border border-[#E3A93B]/40 rounded p-2 text-center">
-          <span className="block text-[10px] font-mono font-bold text-[#C48A24] uppercase">
-            {t('demoNotice')}
-          </span>
-          <span className="block text-[9px] text-[#5B6875] leading-tight mt-0.5">
-            {t('demoSubnotice')}
-          </span>
-        </div>
+        {/* Engine notice */}
+        {backendOnline === false ? (
+          <div className="bg-[#FDF5F5] border border-[#B94A48]/40 rounded p-2 text-center">
+            <span className="block text-[10px] font-mono font-bold text-[#B94A48] uppercase">{t('offlineNotice')}</span>
+            <span className="block text-[9px] text-[#5B6875] leading-tight mt-0.5 font-mono">{t('offlineSubnotice')}</span>
+          </div>
+        ) : (
+          <div className="bg-[#F0F6F9] border border-[#176B87]/30 rounded p-2 text-center">
+            <span className="block text-[10px] font-mono font-bold text-[#176B87] uppercase">{t('demoNotice')}</span>
+            <span className="block text-[9px] text-[#5B6875] leading-tight mt-0.5">{t('demoSubnotice')}</span>
+          </div>
+        )}
       </div>
     </aside>
   );

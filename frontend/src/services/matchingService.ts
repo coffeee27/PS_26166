@@ -1,107 +1,195 @@
-import type { MatchResult, HexagonCell, FeaturePoint, GeospatialResult } from '../types/matching';
+import type { RegistrationResult, SamplePair, SampleImage } from '../types/matching';
 
-export class MatchingService {
-  public async analyzeImages(
-    _referenceImage: string,
-    _queryImage: string,
-    onProgressUpdate?: (stepIndex: number, progressPercent: number) => void
-  ): Promise<MatchResult> {
-    const steps = 6;
-    
-    for (let step = 0; step < steps; step++) {
-      if (onProgressUpdate) {
-        onProgressUpdate(step, Math.round(((step + 1) / steps) * 100));
-      }
-      await new Promise((resolve) => setTimeout(resolve, 600));
-    }
+// Empty base = same origin; the Vite dev server proxies /api and /data to the backend.
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
-    const featurePoints: FeaturePoint[] = [
-      { id: 'f1', x1: 22, y1: 30, x2: 23, y2: 31, confidence: 0.96, status: 'matched', label: 'Tycho Central Crater Rim' },
-      { id: 'f2', x1: 45, y1: 25, x2: 44, y2: 26, confidence: 0.94, status: 'matched', label: 'South Wall Terrace' },
-      { id: 'f3', x1: 68, y1: 38, x2: 67, y2: 39, confidence: 0.91, status: 'matched', label: 'Impact Ejecta Ridge Alpha' },
-      { id: 'f4', x1: 35, y1: 58, x2: 36, y2: 57, confidence: 0.89, status: 'matched', label: 'Secondary Crater Cluster' },
-      { id: 'f5', x1: 78, y1: 64, x2: 79, y2: 63, confidence: 0.93, status: 'matched', label: 'Permanently Shadowed Rim' },
-      { id: 'f6', x1: 52, y1: 72, x2: 51, y2: 74, confidence: 0.87, status: 'matched', label: 'South Pole Basin Ridge' },
-      { id: 'f7', x1: 15, y1: 65, x2: 18, y2: 62, confidence: 0.72, status: 'potential', label: 'Low-Sun Elevation Shadow' },
-      { id: 'f8', x1: 85, y1: 22, x2: 82, y2: 28, confidence: 0.65, status: 'potential', label: 'Regolith Texture Boundary' },
-      { id: 'f9', x1: 30, y1: 85, x2: 42, y2: 88, confidence: 0.48, status: 'unmatched', label: 'Sensor Flare Artifact' },
-      { id: 'f10', x1: 60, y1: 18, x2: 61, y2: 19, confidence: 0.95, status: 'matched', label: 'Northern Ejecta Ray' },
-    ];
+export class ApiError extends Error {
+  readonly status: number;
 
-    const hexagonGrid: HexagonCell[] = [];
-    let matchedCount = 0;
-    
-    for (let row = 0; row < 10; row++) {
-      for (let col = 0; col < 10; col++) {
-        const id = row * 10 + col + 1;
-        const seed = (row * 13 + col * 29) % 100;
-        
-        let status: HexagonCell['status'] = 'matched';
-        let score = 0.88;
-
-        if (seed > 85) {
-          status = 'strong_match';
-          score = 0.98;
-          matchedCount++;
-        } else if (seed > 15) {
-          status = 'matched';
-          score = 0.89 + (seed % 8) * 0.01;
-          matchedCount++;
-        } else if (seed > 6) {
-          status = 'uncertain';
-          score = 0.62;
-        } else {
-          status = 'mismatch';
-          score = 0.35;
-        }
-
-        hexagonGrid.push({
-          id,
-          col,
-          row,
-          status,
-          score: Math.round(score * 100) / 100,
-          terrainType: (row + col) % 3 === 0 ? 'Crater Rim' : (row + col) % 3 === 1 ? 'Mare Regolith' : 'Highland Ejecta',
-        });
-      }
-    }
-
-    const geospatial: GeospatialResult = {
-      latitude: '89.9142° S',
-      longitude: '0.0028° E',
-      elevation: '-3.842 km (South Pole-Aitken Rim)',
-      terrainType: 'Highland Rim / Permanently Shadowed Region',
-      craterDensity: '1,420 craters/1000 km²',
-      solarAzimuth: '114.6°',
-      sunElevationAngle: '14.2°',
-      coordinateSystem: 'LRO LROC-NAC Selective Metric Grid (MOON_ME_2015)',
-      isDemoData: true,
-    };
-
-    return {
-      confidence: 92.7,
-      status: 'HIGH_MATCH',
-      locationVerification: 'LIKELY_SAME',
-      matchedRegions: matchedCount,
-      totalRegions: 100,
-      terrainSimilarity: 'HIGH',
-      featureCorrespondenceCount: 87,
-      rmse: 1.63,
-      maxError: 2.63,
-      inlierCount: 16,
-      inlierRatio: 0.16,
-      spatialCoverage: 0.3125,
-      uniformityScore: 0.344,
-      subpixelAccuracy: 'NOT_ACHIEVED',
-      qualityStatus: 'REJECTED',
-      featurePoints,
-      hexagonGrid,
-      geospatial,
-      processingTimeMs: 3600,
-      isDemoAnalysis: true,
-      analyzedAt: new Date().toISOString(),
-    };
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
   }
 }
 
-export const matchingService = new MatchingService();
+const url = (path: string) => `${API_BASE}${path}`;
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url(path), init);
+  } catch {
+    throw new ApiError(0, 'Cannot reach the registration backend. Start it with: cd backend && uvicorn app.main:app');
+  }
+  const body = await response.json().catch(() => null);
+  if (!response.ok || body?.status === 'error') {
+    throw new ApiError(response.status, body?.message ?? `Request failed (${response.status})`);
+  }
+  return body as T;
+}
+
+/* ----------------------------------------------------------------- API payloads (snake_case) */
+
+interface ApiCell {
+  row: number;
+  col: number;
+  tie_points: number;
+  rmse_px: number | null;
+}
+
+interface ApiAnalyzeResponse {
+  job_id: string;
+  source_filename: string;
+  reference_filename: string;
+  result: {
+    matches: { source: [number, number]; reference: [number, number]; distance: number | null }[];
+    transformation: number[][];
+    metrics: {
+      rmse: number;
+      max_error: number | null;
+      inlier_count: number;
+      inlier_ratio: number;
+      spatial_coverage: number;
+      uniformity_score: number;
+    };
+    quality_assessment: { status: 'ACCEPTED' | 'REJECTED'; subpixel_accuracy: 'ACHIEVED' | 'NOT_ACHIEVED'; reasons: string[] };
+    registered_image: string;
+    overlay_image: string;
+    error_heatmap_image: string;
+    inlier_matches_image: string;
+    reference_preview_image: string;
+    source_preview_image: string;
+    engine: {
+      model: string;
+      model_rmse_px: Record<string, number>;
+      holdout_rmse_m: number | null;
+      fit_rmse_px: number;
+      putative_matches: number;
+      coarse_inliers: number;
+      total_seconds: number;
+      reference_gsd: number | null;
+      source_gsd: number | null;
+      reference_shape: [number, number];
+      source_shape: [number, number];
+      cell_grid: [number, number];
+      cells: ApiCell[];
+      error_heatmap_scale_px: [number, number];
+    };
+  };
+}
+
+interface ApiSampleImage {
+  label: string;
+  filename: string;
+  preview: string;
+  shape: [number, number];
+  size_bytes: number;
+}
+
+interface ApiSample {
+  id: string;
+  title: string;
+  title_hi: string;
+  description: string;
+  reference: ApiSampleImage;
+  source: ApiSampleImage;
+}
+
+/* ----------------------------------------------------------------- mapping */
+
+function toResult(response: ApiAnalyzeResponse, processingTimeMs: number): RegistrationResult {
+  const { result } = response;
+  const { engine, metrics, quality_assessment: quality } = result;
+  return {
+    jobId: response.job_id,
+    referenceFilename: response.reference_filename,
+    sourceFilename: response.source_filename,
+    analyzedAt: new Date().toISOString(),
+    processingTimeMs,
+    model: engine.model,
+    modelRmsePx: engine.model_rmse_px,
+    holdoutRmsePx: metrics.rmse,
+    holdoutRmseM: engine.holdout_rmse_m,
+    fitRmsePx: engine.fit_rmse_px,
+    maxErrorPx: metrics.max_error,
+    tiePointCount: metrics.inlier_count,
+    inlierRatio: metrics.inlier_ratio,
+    spatialCoverage: metrics.spatial_coverage,
+    uniformityScore: metrics.uniformity_score,
+    subpixelAccuracy: quality.subpixel_accuracy,
+    qualityStatus: quality.status,
+    qualityReasons: quality.reasons,
+    referenceGsd: engine.reference_gsd,
+    sourceGsd: engine.source_gsd,
+    referenceShape: engine.reference_shape,
+    sourceShape: engine.source_shape,
+    putativeMatches: engine.putative_matches,
+    coarseInliers: engine.coarse_inliers,
+    engineSeconds: engine.total_seconds,
+    cellGrid: engine.cell_grid,
+    cells: engine.cells.map((cell) => ({ row: cell.row, col: cell.col, tiePoints: cell.tie_points, rmsePx: cell.rmse_px })),
+    heatmapScalePx: engine.error_heatmap_scale_px,
+    tiePoints: result.matches.map((m) => ({ reference: m.reference, source: m.source, errorPx: m.distance })),
+    transformation: result.transformation,
+    images: {
+      registered: url(result.registered_image),
+      overlay: url(result.overlay_image),
+      errorHeatmap: url(result.error_heatmap_image),
+      tiePoints: url(result.inlier_matches_image),
+      referencePreview: url(result.reference_preview_image),
+      sourcePreview: url(result.source_preview_image),
+    },
+  };
+}
+
+const toSampleImage = (image: ApiSampleImage): SampleImage => ({
+  label: image.label,
+  filename: image.filename,
+  preview: url(image.preview),
+  shape: image.shape,
+  sizeBytes: image.size_bytes,
+});
+
+async function timed(run: () => Promise<ApiAnalyzeResponse>): Promise<RegistrationResult> {
+  const started = performance.now();
+  const response = await run();
+  return toResult(response, Math.round(performance.now() - started));
+}
+
+/* ----------------------------------------------------------------- public API */
+
+export const matchingService = {
+  async isOnline(): Promise<boolean> {
+    try {
+      const response = await fetch(url('/health'));
+      return response.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  async listSamples(): Promise<SamplePair[]> {
+    const body = await request<{ samples: ApiSample[] }>('/api/samples');
+    return body.samples.map((s) => ({
+      id: s.id,
+      title: s.title,
+      titleHi: s.title_hi,
+      description: s.description,
+      reference: toSampleImage(s.reference),
+      source: toSampleImage(s.source),
+    }));
+  },
+
+  analyzeFiles(reference: File, source: File): Promise<RegistrationResult> {
+    const form = new FormData();
+    form.append('reference', reference);
+    form.append('source', source);
+    return timed(() => request<ApiAnalyzeResponse>('/api/registration/analyze', { method: 'POST', body: form }));
+  },
+
+  analyzeSample(sampleId: string): Promise<RegistrationResult> {
+    const form = new FormData();
+    form.append('sample_id', sampleId);
+    return timed(() => request<ApiAnalyzeResponse>('/api/registration/analyze-sample', { method: 'POST', body: form }));
+  },
+};

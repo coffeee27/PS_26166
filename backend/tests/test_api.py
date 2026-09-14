@@ -80,3 +80,42 @@ def test_unregistrable_pair_returns_422(client, rng):
     )
     assert response.status_code == 422
     assert response.json()["status"] == "error"
+
+
+@pytest.fixture
+def sample_data(tmp_path, monkeypatch, lunar_texture):
+    from app.registration import samples
+
+    data_dir = tmp_path / "data"
+    sample = samples.SAMPLES[0]
+    height, width = lunar_texture.shape
+    shift = np.float32([[1, 0, 4.0], [0, 1, -2.5]])
+    source = cv2.warpAffine(lunar_texture, shift, (width, height), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
+    for relative, image in ((sample.reference, lunar_texture), (sample.source, source)):
+        (data_dir / relative).parent.mkdir(parents=True, exist_ok=True)
+        assert cv2.imwrite(str(data_dir / relative), np.clip(image, 0, 255).astype(np.uint8))
+    monkeypatch.setattr(main, "DATA_DIR", data_dir)
+    return data_dir, sample
+
+
+def test_samples_list_only_pairs_present_on_disk(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path / "empty")
+    assert client.get("/api/samples").json() == {"samples": []}
+    response = client.post("/api/registration/analyze-sample", data={"sample_id": "vikram-landing-site"})
+    assert response.status_code == 404
+
+
+def test_sample_listing_and_analysis(client, sample_data):
+    data_dir, sample = sample_data
+
+    listed = client.get("/api/samples").json()["samples"]
+    assert [s["id"] for s in listed] == [sample.id]
+    assert listed[0]["reference"]["preview"] == f"/data/samples/{sample.id}/reference_preview.jpg"
+    assert (data_dir / "samples" / sample.id / "source_preview.jpg").is_file()
+
+    response = client.post("/api/registration/analyze-sample", data={"sample_id": sample.id})
+    assert response.status_code == 200, response.text
+    result = response.json()["result"]
+    assert result["metrics"]["rmse"] < 0.5
+    assert result["source_preview_image"].endswith("source_preview.jpg")
+    assert len(result["matches"]) == result["metrics"]["inlier_count"]

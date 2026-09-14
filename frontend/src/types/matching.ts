@@ -1,92 +1,95 @@
-export type MatchStatusType = 'HIGH_MATCH' | 'POSSIBLE_MATCH' | 'LOW_MATCH' | 'NOT_STARTED';
-export type LocationVerification = 'LIKELY_SAME' | 'LIKELY_DIFFERENT' | 'UNCERTAIN';
+export type SubpixelStatus = 'ACHIEVED' | 'NOT_ACHIEVED';
+export type QualityStatus = 'ACCEPTED' | 'REJECTED';
 
 export interface ImageMetadata {
   filename: string;
   fileSize: string;
   dimensions: string;
   format: string;
-  captureDate?: string;
   sensor?: string;
-  solarElevation?: string;
 }
 
-export interface FeaturePoint {
-  id: string;
-  x1: number; // Percentage 0-100
-  y1: number;
-  x2: number;
-  y2: number;
-  confidence: number;
-  status: 'matched' | 'potential' | 'unmatched';
-  label?: string;
+/** A tie point in reference and source pixel coordinates, with its held-out error. */
+export interface TiePoint {
+  reference: [number, number];
+  source: [number, number];
+  errorPx: number | null;
 }
 
-export type HexStatus = 'unprocessed' | 'matched' | 'strong_match' | 'uncertain' | 'mismatch';
-
-export interface HexagonCell {
-  id: number;
-  col: number;
+/** Tie-point count and held-out RMSE of one cell of the engine's analysis grid. */
+export interface GridCell {
   row: number;
-  status: HexStatus;
-  score: number;
-  terrainType: string;
+  col: number;
+  tiePoints: number;
+  rmsePx: number | null;
 }
 
-export interface GeospatialResult {
-  latitude: string;
-  longitude: string;
-  elevation: string;
-  terrainType: string;
-  craterDensity: string;
-  solarAzimuth: string;
-  sunElevationAngle: string;
-  coordinateSystem: string;
-  isDemoData: true;
+export interface RegistrationImages {
+  registered: string;
+  overlay: string;
+  errorHeatmap: string;
+  tiePoints: string;
+  referencePreview: string;
+  sourcePreview: string;
 }
 
-export interface ProcessingStep {
-  id: number;
-  key: string;
-  labelEn: string;
-  labelHi: string;
-  descriptionEn: string;
-  descriptionHi: string;
-}
+export interface RegistrationResult {
+  jobId: string;
+  referenceFilename: string;
+  sourceFilename: string;
+  analyzedAt: string;
+  processingTimeMs: number;
 
-export interface MatchResult {
-  confidence: number; // e.g. 92.7
-  status: MatchStatusType;
-  locationVerification: LocationVerification;
-  matchedRegions: number;
-  totalRegions: number;
-  terrainSimilarity: 'HIGH' | 'MEDIUM' | 'LOW';
-  featureCorrespondenceCount: number;
-  rmse: number;
-  maxError: number;
-  inlierCount: number;
+  /** Geometric model chosen by spatial-block hold-out, e.g. "polynomial-4". */
+  model: string;
+  /** Held-out RMSE of every candidate model, reference pixels. */
+  modelRmsePx: Record<string, number>;
+  holdoutRmsePx: number;
+  holdoutRmseM: number | null;
+  fitRmsePx: number;
+  maxErrorPx: number | null;
+
+  tiePointCount: number;
   inlierRatio: number;
   spatialCoverage: number;
   uniformityScore: number;
-  subpixelAccuracy: 'ACHIEVED' | 'NOT_ACHIEVED';
-  qualityStatus: 'ACCEPTED' | 'REJECTED';
-  featurePoints: FeaturePoint[];
-  hexagonGrid: HexagonCell[];
-  geospatial: GeospatialResult;
-  processingTimeMs: number;
-  isDemoAnalysis: true;
-  analyzedAt: string;
+
+  subpixelAccuracy: SubpixelStatus;
+  qualityStatus: QualityStatus;
+  qualityReasons: string[];
+
+  referenceGsd: number | null;
+  sourceGsd: number | null;
+  referenceShape: [number, number]; // [height, width]
+  sourceShape: [number, number];
+
+  putativeMatches: number;
+  coarseInliers: number;
+  engineSeconds: number;
+
+  cellGrid: [number, number]; // [rows, cols]
+  cells: GridCell[];
+  heatmapScalePx: [number, number];
+  tiePoints: TiePoint[];
+  /** Least-squares source -> reference homography, for display only. */
+  transformation: number[][];
+  images: RegistrationImages;
 }
 
-export interface SamplePreset {
+export interface SampleImage {
+  label: string;
+  filename: string;
+  preview: string;
+  shape: [number, number];
+  sizeBytes: number;
+}
+
+/** A real image pair available on the backend machine. */
+export interface SamplePair {
   id: string;
-  titleEn: string;
+  title: string;
   titleHi: string;
-  locationEn: string;
-  locationHi: string;
-  refImage: string;
-  queryImage: string;
-  refMetadata: ImageMetadata;
-  queryMetadata: ImageMetadata;
-  expectedConfidence: number;
+  description: string;
+  reference: SampleImage;
+  source: SampleImage;
 }

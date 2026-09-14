@@ -1,258 +1,159 @@
 import React from 'react';
-import type { MatchResult, ImageMetadata } from '../../types/matching';
+import type { RegistrationResult } from '../../types/matching';
 import { useTranslation } from '../../i18n';
-import { FileCheck, Download, Printer, ShieldCheck, Cpu, ArrowRight } from 'lucide-react';
+import { FileCheck, FileJson, FileSpreadsheet, Printer, Cpu, ArrowRight, Target, Crosshair, Grid3x3, Gauge, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { MetricTile, QualityBanner } from './RegistrationSummary';
+import { downloadReport, downloadTiePointsCsv, formatMetres, formatPercent, formatPx, modelLabel } from '../../utils/registration';
 
-interface AnalysisSummaryProps {
-  result: MatchResult;
-  refImage: string;
-  queryImage: string;
-  refMeta: ImageMetadata | null;
-  queryMeta: ImageMetadata | null;
-}
-
-export const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
-  result,
-  refImage,
-  queryImage,
-  refMeta,
-  queryMeta,
-}) => {
+export const AnalysisSummary: React.FC<{ result: RegistrationResult }> = ({ result }) => {
   const { t } = useTranslation();
 
-  const handleDownloadReport = () => {
-    const reportText = `
-===================================================================
-PS-166 LUNAR IMAGE MATCHING PLATFORM - GEOSPATIAL ANALYSIS REPORT
-===================================================================
-Timestamp: ${result.analyzedAt}
-Pipeline Execution Time: ${result.processingTimeMs} ms
-Analysis Type: DEMO SIMULATED ANALYSIS
+  const models = Object.entries(result.modelRmsePx);
+  const worst = Math.max(...models.map(([, value]) => value), result.holdoutRmsePx);
 
-MATCH VERIFICATION RESULTS:
--------------------------------------------------------------------
-Match Confidence Score:        ${result.confidence}%
-Location Assessment:            ${result.locationVerification} (LIKELY SAME LUNAR LOCATION)
-Match Status:                   ${result.status}
-Matched Surface Regions:        ${result.matchedRegions} / ${result.totalRegions}
-Terrain Similarity Level:       ${result.terrainSimilarity}
-Feature Correspondence Count:  ${result.featureCorrespondenceCount}
+  const outputs = [
+    { src: result.images.overlay, label: t('overlayTitle') },
+    { src: result.images.registered, label: t('registeredImage') },
+    { src: result.images.errorHeatmap, label: t('errorHeatmapImage') },
+    { src: result.images.tiePoints, label: t('tiePointImage') },
+  ];
 
-GEOSPATIAL COORDINATE VERIFICATION (DEMO DATA):
--------------------------------------------------------------------
-Latitude:   ${result.geospatial.latitude}
-Longitude:  ${result.geospatial.longitude}
-Elevation:  ${result.geospatial.elevation}
-Datum:      ${result.geospatial.coordinateSystem}
-
-IMAGE METADATA:
--------------------------------------------------------------------
-Reference File: ${refMeta?.filename || 'REF_FRAME'}
-Query File:     ${queryMeta?.filename || 'QUERY_FRAME'}
-Resolution:     ${refMeta?.dimensions || '4096 x 3072 px'}
-
-===================================================================
-PS-166 Lunar Remote Sensing Analysis Engine v1.0
-===================================================================
-    `;
-
-    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `PS166_LUNAR_MATCH_REPORT_${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
+  const buttonClass = 'px-3 py-2 rounded font-semibold transition-colors flex items-center space-x-1.5';
 
   return (
     <div className="bg-white border border-[#D5DDE5] rounded-lg p-6 shadow-sm space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#E9EEF3] gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-[#E9EEF3] gap-3">
         <div>
           <div className="flex items-center space-x-2">
             <FileCheck className="w-5 h-5 text-[#176B87]" />
-            <h2 className="text-base font-bold font-mono text-[#17212B] uppercase tracking-wider">
-              {t('resultsTitle')}
-            </h2>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#EEF7F2] text-[#2E7D5B] border border-[#2E7D5B]/30 uppercase">
-              COMPLETE
-            </span>
+            <h2 className="text-base font-bold font-mono text-[#17212B] uppercase tracking-wider">{t('resultsTitle')}</h2>
           </div>
-          <p className="text-xs text-[#5B6875] mt-1">{t('resultsDesc')}</p>
+          <p className="text-[11px] font-mono text-[#5B6875] mt-1">
+            {result.referenceFilename} ← {result.sourceFilename} · {new Date(result.analyzedAt).toLocaleString()}
+          </p>
         </div>
 
-        <div className="flex items-center space-x-2 font-mono text-xs">
-          <button
-            onClick={handleDownloadReport}
-            className="px-3.5 py-2 rounded bg-[#176B87] hover:bg-[#3B82A0] text-white font-semibold transition-colors flex items-center space-x-1.5 shadow"
-          >
-            <Download className="w-4 h-4" />
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs print:hidden">
+          <button type="button" onClick={() => downloadReport(result)} className={`${buttonClass} bg-[#176B87] hover:bg-[#3B82A0] text-white shadow`}>
+            <FileJson className="w-4 h-4" />
             <span>{t('downloadReport')}</span>
           </button>
-          <button
-            onClick={handlePrint}
-            className="px-3 py-2 rounded bg-[#F4F7FA] hover:bg-[#E9EEF3] text-[#17212B] border border-[#D5DDE5] font-medium transition-colors flex items-center space-x-1.5"
-          >
+          <button type="button" onClick={() => downloadTiePointsCsv(result)} className={`${buttonClass} bg-[#176B87] hover:bg-[#3B82A0] text-white shadow`}>
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>{t('downloadTiePoints')}</span>
+          </button>
+          <button type="button" onClick={() => window.print()} className={`${buttonClass} bg-[#F4F7FA] hover:bg-[#E9EEF3] text-[#17212B] border border-[#D5DDE5]`}>
             <Printer className="w-4 h-4" />
             <span>{t('printSummary')}</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="border border-[#D5DDE5] rounded p-2.5 bg-[#F8FAFC]">
-          <span className="text-[10px] font-mono font-bold text-[#5B6875] block mb-1 uppercase">
-            {t('referenceImageTitle')}
-          </span>
-          <div className="aspect-video bg-black rounded overflow-hidden border border-gray-300">
-            <img src={refImage} alt="Reference" className="w-full h-full object-cover" />
-          </div>
-          {refMeta && (
-            <div className="mt-2 text-[10px] font-mono text-[#5B6875] flex justify-between">
-              <span>{refMeta.filename}</span>
-              <span>{refMeta.dimensions}</span>
-            </div>
-          )}
+      <QualityBanner result={result} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricTile
+          icon={<Target className="w-3 h-3" />}
+          label={t('holdoutRmse')}
+          value={formatPx(result.holdoutRmsePx)}
+          detail={result.holdoutRmseM !== null ? `= ${formatMetres(result.holdoutRmseM)}` : undefined}
+        />
+        <MetricTile icon={<Gauge className="w-3 h-3" />} label={t('fitRmse')} value={formatPx(result.fitRmsePx)} detail={`${t('maxError')} ${formatPx(result.maxErrorPx)}`} />
+        <MetricTile
+          icon={<Crosshair className="w-3 h-3" />}
+          label={t('tiePoints')}
+          value={result.tiePointCount.toLocaleString()}
+          detail={`${t('tiePointRatio')} ${formatPercent(result.inlierRatio)}`}
+        />
+        <MetricTile
+          icon={<Grid3x3 className="w-3 h-3" />}
+          label={t('coverage')}
+          value={formatPercent(result.spatialCoverage)}
+          detail={`${t('uniformity')} ${result.uniformityScore.toFixed(2)}`}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 font-mono text-xs">
+        <div className="lg:col-span-2 border border-[#D5DDE5] rounded p-4 space-y-2">
+          <span className="text-[10px] font-bold text-[#17212B] uppercase tracking-wider block">{t('modelComparison')}</span>
+          {models.map(([name, value]) => {
+            const isSelected = name === result.model;
+            return (
+              <div key={name} className="grid grid-cols-[9rem_1fr_5rem] items-center gap-3">
+                <span className={isSelected ? 'font-bold text-[#176B87]' : 'text-[#5B6875]'}>{modelLabel(name)}</span>
+                <div className="h-3 bg-[#E9EEF3] rounded overflow-hidden">
+                  <div className={`h-full rounded ${isSelected ? 'bg-[#176B87]' : 'bg-[#94A3B8]'}`} style={{ width: `${(value / worst) * 100}%` }} />
+                </div>
+                <span className={`text-right tabular-nums ${isSelected ? 'font-bold text-[#176B87]' : 'text-[#17212B]'}`}>
+                  {formatPx(value)}
+                </span>
+              </div>
+            );
+          })}
+          <p className="text-[10px] text-[#7E8B9B] pt-1">
+            {modelLabel(result.model)} · {t('selectedModel')}
+          </p>
         </div>
 
-        <div className="border border-[#D5DDE5] rounded p-2.5 bg-[#F8FAFC]">
-          <span className="text-[10px] font-mono font-bold text-[#176B87] block mb-1 uppercase">
-            {t('queryImageTitle')}
-          </span>
-          <div className="aspect-video bg-black rounded overflow-hidden border border-gray-300">
-            <img src={queryImage} alt="Query" className="w-full h-full object-cover" />
-          </div>
-          {queryMeta && (
-            <div className="mt-2 text-[10px] font-mono text-[#5B6875] flex justify-between">
-              <span>{queryMeta.filename}</span>
-              <span>{queryMeta.dimensions}</span>
+        <div className="border border-[#D5DDE5] rounded p-4 space-y-2">
+          <span className="text-[10px] font-bold text-[#17212B] uppercase tracking-wider block">{t('pipelineTitle')}</span>
+          {[
+            [t('putativeMatches'), result.putativeMatches.toLocaleString()],
+            [t('coarseInliers'), result.coarseInliers.toLocaleString()],
+            [t('tiePoints'), result.tiePointCount.toLocaleString()],
+            [t('engineTime'), `${result.engineSeconds.toFixed(1)} s`],
+            [t('roundTrip'), `${(result.processingTimeMs / 1000).toFixed(1)} s`],
+          ].map(([label, value]) => (
+            <div key={label} className="flex justify-between">
+              <span className="text-[#5B6875]">{label}</span>
+              <span className="font-bold text-[#17212B] tabular-nums">{value}</span>
             </div>
-          )}
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-        <div className="p-3 bg-[#EEF7F2] border border-[#2E7D5B]/30 rounded">
-          <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-            {t('matchConfidence')}
-          </span>
-          <span className="text-xl font-bold text-[#2E7D5B]">{result.confidence}%</span>
-        </div>
-
-        <div className="p-3 bg-[#F0F6F9] border border-[#176B87]/30 rounded">
-          <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-            {t('locationAssessment')}
-          </span>
-          <span className="text-xs font-bold text-[#176B87] flex items-center">
-            <ShieldCheck className="w-3.5 h-3.5 mr-1" />
-            LIKELY SAME
-          </span>
-        </div>
-
-        <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-          <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-            {t('matchedSurfaceRegions')}
-          </span>
-          <span className="text-xl font-bold text-[#17212B]">
-            {result.matchedRegions} / {result.totalRegions}
-          </span>
-        </div>
-
-        <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-          <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-            {t('terrainSimilarity')}
-          </span>
-          <span className="text-xl font-bold text-[#17212B]">{result.terrainSimilarity}</span>
+      <div className="space-y-3">
+        <span className="text-[10px] font-mono font-bold text-[#17212B] uppercase tracking-wider block">{t('outputsTitle')}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {outputs.map((output) => (
+            <a
+              key={output.label}
+              href={output.src}
+              target="_blank"
+              rel="noreferrer"
+              className="group border border-[#D5DDE5] rounded p-2 bg-[#F8FAFC] hover:border-[#176B87] transition-colors"
+            >
+              <div className="aspect-square bg-black rounded overflow-hidden">
+                <img src={output.src} alt={output.label} loading="lazy" className="w-full h-full object-contain" />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] font-mono">
+                <span className="text-[#17212B] font-semibold">{output.label}</span>
+                <span className="text-[#176B87] flex items-center opacity-70 group-hover:opacity-100">
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  {t('openFullSize')}
+                </span>
+              </div>
+            </a>
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-      RMSE
-    </span>
-    <span className="text-xl font-bold text-[#17212B]">
-      {result.rmse.toFixed(2)} px
-    </span>
-  </div>
-
-  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-      Inlier Ratio
-    </span>
-    <span className="text-xl font-bold text-[#17212B]">
-      {(result.inlierRatio * 100).toFixed(1)}%
-    </span>
-  </div>
-
-  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-      Inlier Matches
-    </span>
-    <span className="text-xl font-bold text-[#17212B]">
-      {result.inlierCount}
-    </span>
-  </div>
-
-  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-      Spatial Coverage
-    </span>
-    <span className="text-xl font-bold text-[#17212B]">
-      {(result.spatialCoverage * 100).toFixed(1)}%
-    </span>
-  </div>
-</div>
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
-  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-      Sub-pixel Accuracy
-    </span>
-    <span className="text-sm font-bold text-[#17212B]">
-      {result.subpixelAccuracy}
-    </span>
-  </div>
-
-  <div className="p-3 bg-[#F8FAFC] border border-[#D5DDE5] rounded">
-    <span className="text-[10px] text-[#5B6875] uppercase block mb-1">
-      Quality Status
-    </span>
-    <span className="text-sm font-bold text-[#17212B]">
-      {result.qualityStatus}
-    </span>
-  </div>
-</div>
-        
-        
-        
-        <Link
-          to="/heatmap"
-          className="p-3 border border-[#D5DDE5] hover:border-[#176B87] rounded text-xs font-mono text-[#17212B] bg-[#F8FAFC] hover:bg-[#F0F6F9] transition-colors flex items-center justify-between group"
-        >
-          <span>{t('viewHeatmap')}</span>
-          <ArrowRight className="w-4 h-4 text-[#176B87] group-hover:translate-x-1 transition-transform" />
-        </Link>
-        <Link
-          to="/features"
-          className="p-3 border border-[#D5DDE5] hover:border-[#176B87] rounded text-xs font-mono text-[#17212B] bg-[#F8FAFC] hover:bg-[#F0F6F9] transition-colors flex items-center justify-between group"
-        >
-          <span>{t('viewFeatures')}</span>
-          <ArrowRight className="w-4 h-4 text-[#176B87] group-hover:translate-x-1 transition-transform" />
-        </Link>
-        <Link
-          to="/geospatial"
-          className="p-3 border border-[#D5DDE5] hover:border-[#176B87] rounded text-xs font-mono text-[#17212B] bg-[#F8FAFC] hover:bg-[#F0F6F9] transition-colors flex items-center justify-between group"
-        >
-          <span>{t('viewGeospatial')}</span>
-          <ArrowRight className="w-4 h-4 text-[#176B87] group-hover:translate-x-1 transition-transform" />
-        </Link>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs print:hidden">
+        {[
+          { to: '/heatmap', label: t('viewHeatmap') },
+          { to: '/features', label: t('viewFeatures') },
+          { to: '/geospatial', label: t('viewGeospatial') },
+        ].map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="p-3 border border-[#D5DDE5] hover:border-[#176B87] rounded text-[#17212B] bg-[#F8FAFC] hover:bg-[#F0F6F9] transition-colors flex items-center justify-between group"
+          >
+            <span>{link.label}</span>
+            <ArrowRight className="w-4 h-4 text-[#176B87] group-hover:translate-x-1 transition-transform" />
+          </Link>
+        ))}
       </div>
 
       <div className="bg-[#F4F7FA] border border-[#D5DDE5] rounded p-4 text-xs font-mono space-y-1.5">
@@ -260,9 +161,7 @@ PS-166 Lunar Remote Sensing Analysis Engine v1.0
           <Cpu className="w-4 h-4" />
           <span>{t('backendNoteTitle')}</span>
         </div>
-        <p className="text-[#5B6875] leading-relaxed">
-          {t('backendNoteDesc')}
-        </p>
+        <p className="text-[#5B6875] leading-relaxed">{t('backendNoteDesc')}</p>
       </div>
     </div>
   );

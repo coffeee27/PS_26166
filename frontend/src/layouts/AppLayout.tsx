@@ -50,12 +50,12 @@ export const AppLayout: React.FC = () => {
             </span>
             <span className="text-[#D5DDE5]">|</span>
             <span className="text-[#5B6875] font-semibold">
-              PS-166 / GEOSPATIAL VERIFICATION
+              PS-26166 / IMAGE REGISTRATION
             </span>
           </div>
 
           <div className="flex items-center space-x-3">
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#E3A93B]/10 text-[#C48A24] border border-[#E3A93B]/30 uppercase">
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#176B87]/10 text-[#176B87] border border-[#176B87]/30 uppercase">
               {t('demoNotice')}
             </span>
             <LanguageToggle />

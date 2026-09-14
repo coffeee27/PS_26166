@@ -1,75 +1,56 @@
 import React from 'react';
 import { useTranslation } from '../../i18n';
-import { Loader2, CheckCircle2, Cpu } from 'lucide-react';
+import { Cpu, Timer } from 'lucide-react';
 
 interface AnalysisProgressProps {
-  currentStep: number;
-  progressPercent: number;
+  elapsedMs: number;
 }
 
-export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
-  currentStep,
-  progressPercent,
-}) => {
+/**
+ * The engine runs as one request with no intermediate progress, so this shows
+ * elapsed time and the stages being executed rather than a made-up percentage.
+ */
+export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({ elapsedMs }) => {
   const { t } = useTranslation();
 
-  const steps = [
-    { key: 'stagePreprocessing', label: t('stagePreprocessing') },
-    { key: 'stageExtractingFeatures', label: t('stageExtractingFeatures') },
-    { key: 'stageAligningImages', label: t('stageAligningImages') },
-    { key: 'stageComparingTerrain', label: t('stageComparingTerrain') },
-    { key: 'stageGeneratingHeatmap', label: t('stageGeneratingHeatmap') },
-    { key: 'stageVerifyingLocation', label: t('stageVerifyingLocation') },
+  const stages = [
+    t('stagePreprocessing'),
+    t('stageExtractingFeatures'),
+    t('stageAligningImages'),
+    t('stageComparingTerrain'),
+    t('stageGeneratingHeatmap'),
+    t('stageVerifyingLocation'),
   ];
 
   return (
-    <div className="bg-white border border-[#D5DDE5] rounded-lg p-5 shadow-sm space-y-4">
-      {/* Header */}
+    <div className="bg-white border border-[#D5DDE5] rounded-lg p-5 shadow-sm space-y-4" role="status" aria-live="polite">
       <div className="flex items-center justify-between font-mono text-xs">
         <div className="flex items-center space-x-2 text-[#176B87] font-bold uppercase">
           <Cpu className="w-4 h-4 animate-spin" />
-          <span>EXECUTING COMPUTER VISION FEATURE MATCHING PIPELINE...</span>
+          <span>{t('progressTitle')}</span>
         </div>
-        <span className="font-bold text-[#176B87]">{progressPercent}% COMPLETE</span>
+        <span className="font-bold text-[#176B87] flex items-center">
+          <Timer className="w-3.5 h-3.5 mr-1" />
+          {t('progressElapsed')} {(elapsedMs / 1000).toFixed(1)} s
+        </span>
       </div>
 
-      {/* Main Progress Bar */}
-      <div className="w-full bg-[#E9EEF3] h-2.5 rounded-full overflow-hidden border border-[#D5DDE5]">
-        <div
-          className="bg-[#176B87] h-full transition-all duration-300 rounded-full"
-          style={{ width: `${progressPercent}%` }}
-        />
+      <div className="w-full bg-[#E9EEF3] h-2.5 rounded-full overflow-hidden border border-[#D5DDE5] relative">
+        <div className="absolute inset-y-0 w-1/3 bg-[#176B87] rounded-full animate-[indeterminate_1.4s_ease-in-out_infinite]" />
       </div>
+      <style>{'@keyframes indeterminate{0%{left:-33%}100%{left:100%}}'}</style>
 
-      {/* Step Sequence Checklist */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs pt-1">
-        {steps.map((step, idx) => {
-          const isDone = idx < currentStep;
-          const isCurrent = idx === currentStep;
-
-          return (
-            <div
-              key={step.key}
-              className={`flex items-center space-x-2 p-2 rounded border text-[11px] transition-colors ${
-                isDone
-                  ? 'bg-[#EEF7F2] border-[#2E7D5B]/30 text-[#2E7D5B]'
-                  : isCurrent
-                  ? 'bg-[#E6F0F4] border-[#176B87] text-[#176B87] font-semibold'
-                  : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#94A3B8]'
-              }`}
-            >
-              {isDone ? (
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D5B] shrink-0" />
-              ) : isCurrent ? (
-                <Loader2 className="w-3.5 h-3.5 text-[#176B87] animate-spin shrink-0" />
-              ) : (
-                <span className="w-3.5 h-3.5 rounded-full border border-gray-300 inline-block shrink-0" />
-              )}
-              <span className="truncate">{step.label}</span>
-            </div>
-          );
-        })}
-      </div>
+      <ol className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[11px] pt-1">
+        {stages.map((stage, index) => (
+          <li key={stage} className="flex items-center space-x-2 p-2 rounded border bg-[#F8FAFC] border-[#E2E8F0] text-[#5B6875]">
+            <span className="w-4 h-4 rounded-full bg-[#176B87]/10 text-[#176B87] text-[9px] font-bold flex items-center justify-center shrink-0">
+              {index + 1}
+            </span>
+            <span className="truncate">{stage}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="text-[11px] font-mono text-[#7E8B9B]">{t('progressHint')}</p>
     </div>
   );
 };

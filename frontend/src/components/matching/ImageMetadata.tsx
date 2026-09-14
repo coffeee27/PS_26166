@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ImageMetadata as ImageMetaType } from '../../types/matching';
 import { useTranslation } from '../../i18n';
-import { HardDrive, Maximize2, Sun, Radio } from 'lucide-react';
+import { HardDrive, Maximize2, Radio } from 'lucide-react';
 
 interface ImageMetadataProps {
   metadata: ImageMetaType;
@@ -13,7 +13,7 @@ export const ImageMetadata: React.FC<ImageMetadataProps> = ({ metadata }) => {
   return (
     <div className="bg-[#F8FAFC] border border-[#D5DDE5] rounded p-3 text-xs font-mono space-y-2">
       <div className="flex items-center justify-between pb-1.5 border-b border-[#E2E8F0] font-bold text-[#17212B]">
-        <span className="truncate max-w-[200px]" title={metadata.filename}>
+        <span className="truncate max-w-[260px]" title={metadata.filename}>
           {metadata.filename}
         </span>
         <span className="text-[10px] bg-[#176B87]/10 text-[#176B87] px-1.5 py-0.5 rounded font-semibold uppercase">
@@ -39,24 +39,14 @@ export const ImageMetadata: React.FC<ImageMetadataProps> = ({ metadata }) => {
         </div>
 
         {metadata.sensor && (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between col-span-2">
             <span className="flex items-center">
               <Radio className="w-3 h-3 mr-1 text-[#176B87]" />
               {t('sensor')}:
             </span>
-            <span className="font-semibold text-[#17212B] truncate max-w-[110px]" title={metadata.sensor}>
+            <span className="font-semibold text-[#17212B] truncate max-w-[260px]" title={metadata.sensor}>
               {metadata.sensor}
             </span>
-          </div>
-        )}
-
-        {metadata.solarElevation && (
-          <div className="flex items-center justify-between">
-            <span className="flex items-center">
-              <Sun className="w-3 h-3 mr-1 text-[#176B87]" />
-              {t('solarElevation')}:
-            </span>
-            <span className="font-semibold text-[#17212B]">{metadata.solarElevation}</span>
           </div>
         )}
       </div>

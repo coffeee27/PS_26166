@@ -8,6 +8,16 @@ import numpy as np
 from .imaging import normalize_to_uint8
 
 
+def preview_image(image: np.ndarray, max_side: int = 1600) -> np.ndarray:
+    """8-bit, size-limited copy of any image for display in a browser."""
+    preview = normalize_to_uint8(image)
+    height, width = preview.shape[:2]
+    scale = max_side / max(height, width)
+    if scale < 1:
+        preview = cv2.resize(preview, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA)
+    return preview
+
+
 def overlay_image(reference: np.ndarray, registered: np.ndarray) -> np.ndarray:
     """False-colour overlay: reference in magenta, registered source in green, grey where they agree."""
     reference8 = normalize_to_uint8(reference)

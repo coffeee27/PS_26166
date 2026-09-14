@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
+from app.registration import samples
 from app.registration.service import analyze_pair
 
 BACKEND = Path(__file__).resolve().parent.parent
@@ -58,23 +59,14 @@ def health_check():
     }
 
 
-@app.post("/api/registration/analyze")
-async def analyze_images(
-    source: UploadFile = File(...),
-    reference: UploadFile = File(...),
-    source_gsd: float | None = Form(None, gt=0, description="Source ground sample distance, metres/pixel"),
-    reference_gsd: float | None = Form(None, gt=0, description="Reference ground sample distance, metres/pixel"),
-):
+def _new_job() -> tuple[str, Path]:
     job_id = uuid.uuid4().hex
     job_dir = UPLOAD_DIR / job_id
     job_dir.mkdir(parents=True)
+    return job_id, job_dir
 
-    try:
-        source_path = await _save_upload(source, job_dir, "source")
-        reference_path = await _save_upload(reference, job_dir, "reference")
-    except ValueError as error:
-        return _error(400, str(error))
 
+async def _run_job(job_id, job_dir, reference_path, source_path, reference_name, source_name, reference_gsd=None, source_gsd=None):
     try:
         result = await run_in_threadpool(
             analyze_pair,
@@ -95,7 +87,51 @@ async def analyze_images(
     return {
         "status": "success",
         "job_id": job_id,
-        "source_filename": source.filename,
-        "reference_filename": reference.filename,
+        "source_filename": source_name,
+        "reference_filename": reference_name,
         "result": result,
     }
+
+
+@app.post("/api/registration/analyze")
+async def analyze_images(
+    source: UploadFile = File(...),
+    reference: UploadFile = File(...),
+    source_gsd: float | None = Form(None, gt=0, description="Source ground sample distance, metres/pixel"),
+    reference_gsd: float | None = Form(None, gt=0, description="Reference ground sample distance, metres/pixel"),
+):
+    job_id, job_dir = _new_job()
+    try:
+        source_path = await _save_upload(source, job_dir, "source")
+        reference_path = await _save_upload(reference, job_dir, "reference")
+    except ValueError as error:
+        return _error(400, str(error))
+
+    return await _run_job(
+        job_id, job_dir, reference_path, source_path, reference.filename, source.filename, reference_gsd, source_gsd
+    )
+
+
+@app.get("/api/samples")
+async def list_samples():
+    """Real image pairs present on this machine, with browser previews."""
+    available = [sample for sample in samples.SAMPLES if samples.is_available(sample, DATA_DIR)]
+    described = [await run_in_threadpool(samples.describe, sample, DATA_DIR, "/data") for sample in available]
+    return {"samples": described}
+
+
+@app.post("/api/registration/analyze-sample")
+async def analyze_sample(sample_id: str = Form(...)):
+    sample = samples.get_sample(sample_id)
+    if sample is None or not samples.is_available(sample, DATA_DIR):
+        return _error(404, f"Sample '{sample_id}' is not available on this server")
+
+    job_id, job_dir = _new_job()
+    return await _run_job(
+        job_id,
+        job_dir,
+        DATA_DIR / sample.reference,
+        DATA_DIR / sample.source,
+        Path(sample.reference).name,
+        Path(sample.source).name,
+    )

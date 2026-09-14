@@ -18,9 +18,9 @@ from app.services.quality_assessment import assess_registration_quality
 
 from .imaging import load_image, normalize_to_uint8
 from .pipeline import RegistrationConfig, register, warp_to_reference
-from .products import cell_statistics, error_heatmap, match_visualization, overlay_image
+from .products import cell_statistics, error_heatmap, match_visualization, overlay_image, preview_image
 
-MAX_MATCHES_IN_RESPONSE = 300
+MAX_MATCHES_IN_RESPONSE = 5000
 CELL_GRID = (8, 8)
 HEATMAP_MAX_ERROR_PX = 2.0
 
@@ -59,6 +59,8 @@ def analyze_pair(
             "tie_points.jpg",
             match_visualization(reference.data, source.data, result.reference_points, result.source_points, errors),
         ),
+        "reference_preview_image": ("reference_preview.jpg", preview_image(reference.data)),
+        "source_preview_image": ("source_preview.jpg", preview_image(source.data)),
     }
     urls = {}
     for key, (filename, image) in images.items():
