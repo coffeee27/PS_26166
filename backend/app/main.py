@@ -1,20 +1,54 @@
 import os
-from fastapi import FastAPI, UploadFile, File
+import uuid
+from pathlib import Path
+
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
-from io import BytesIO
-import cv2
-import numpy as np
-from app.services.geometric_verification import verify_matches
-from app.services.quality_assessment import assess_registration_quality
+from starlette.concurrency import run_in_threadpool
+
+from app.registration.service import analyze_pair
+
+BACKEND = Path(__file__).resolve().parent.parent
+DATA_DIR = BACKEND / "data"
+UPLOAD_DIR = DATA_DIR / "uploads"
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 
 app = FastAPI(
     title="Lunar Image Matching API",
     description="Backend for lunar image registration and matching",
-    version="1.0.0"
+    version="1.1.0"
 )
 
-app.mount("/data", StaticFiles(directory="data"), name="data")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
+
+
+def _error(status_code: int, message: str) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content={"status": "error", "message": message})
+
+
+async def _save_upload(upload: UploadFile, directory: Path, stem: str) -> Path:
+    # The client's filename is only used for its extension, never as a path.
+    extension = Path(upload.filename or "").suffix.lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Unsupported file type '{extension}'; use one of {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+    content = await upload.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise ValueError("File is larger than 200 MB")
+    path = directory / f"{stem}{extension}"
+    path.write_bytes(content)
+    return path
+
 
 @app.get("/health")
 def health_check():
@@ -27,158 +61,41 @@ def health_check():
 @app.post("/api/registration/analyze")
 async def analyze_images(
     source: UploadFile = File(...),
-    reference: UploadFile = File(...)
+    reference: UploadFile = File(...),
+    source_gsd: float | None = Form(None, gt=0, description="Source ground sample distance, metres/pixel"),
+    reference_gsd: float | None = Form(None, gt=0, description="Reference ground sample distance, metres/pixel"),
 ):
-    upload_dir = "data/uploads"
-    os.makedirs(upload_dir, exist_ok=True)
+    job_id = uuid.uuid4().hex
+    job_dir = UPLOAD_DIR / job_id
+    job_dir.mkdir(parents=True)
 
-    source_path = os.path.join(upload_dir, source.filename)
-    reference_path = os.path.join(upload_dir, reference.filename)
-
-    with open(source_path, "wb") as file:
-        file.write(await source.read())
-
-    with open(reference_path, "wb") as file:
-        file.write(await reference.read())
-        
-    # Validate that both uploaded files are images
     try:
-        Image.open(source_path).verify()
-        Image.open(reference_path).verify()
-        
-        source_image = cv2.imread(source_path)
-        reference_image = cv2.imread(reference_path)
-        
-        if source_image is None or reference_image is None:
-            return {
-                "status": "error",
-                "message": "Could not load one or both images with OpenCV"
-            }
-            
-        print(source_image.shape)
-        print(reference_image.shape)
-        
-        source_gray = cv2.cvtColor(source_image, cv2.COLOR_BGR2GRAY)
-        reference_gray = cv2.cvtColor(reference_image, cv2.COLOR_BGR2GRAY)
-        
-        sift = cv2.SIFT_create()
-        source_keypoints, source_descriptors = sift.detectAndCompute(source_gray, None)
-        reference_keypoints, reference_descriptors = sift.detectAndCompute(reference_gray, None)
-        
-        bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+        source_path = await _save_upload(source, job_dir, "source")
+        reference_path = await _save_upload(reference, job_dir, "reference")
+    except ValueError as error:
+        return _error(400, str(error))
 
-        matches = bf.match(source_descriptors, reference_descriptors)
-        matches = sorted(matches, key=lambda x: x.distance)
-        candidate_matches = matches[:300]
-        good_matches = []
-
-        grid_rows = 4
-        grid_cols = 4
-        max_matches_per_cell = 10
-
-        h, w = source_gray.shape[:2]
-        grid_counts = np.zeros((grid_rows, grid_cols), dtype=int)
-
-        for match in candidate_matches:
-           x, y = source_keypoints[match.queryIdx].pt
-
-           col = min(int(x / w * grid_cols), grid_cols - 1)
-           row = min(int(y / h * grid_rows), grid_rows - 1)
-
-           if grid_counts[row, col] < max_matches_per_cell:
-             good_matches.append(match)
-             grid_counts[row, col] += 1
-
-           if len(good_matches) >= 100:
-             break
-        
-        source_points = np.float32(
-            [source_keypoints[m.queryIdx].pt for m in good_matches]
-        ).reshape(-1, 1, 2)
-
-        reference_points = np.float32(
-            [reference_keypoints[m.trainIdx].pt for m in good_matches]
-        ).reshape(-1, 1, 2)
-        
-        H, inlier_matches, geometric_metrics = verify_matches(
-           source_points,
-           reference_points,
-           good_matches,
-           source_gray.shape,
-           source_keypoints
-)
-        match_visualization = cv2.drawMatches(
-          source_image,
-          source_keypoints,
-          reference_image,
-          reference_keypoints,
-          inlier_matches,
-          None,
-          flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS
-)
-
-        cv2.imwrite(
-           os.path.join(upload_dir, "inlier_matches.jpg"),
-           match_visualization
-)
-
-        
-        registered_image = cv2.warpPerspective(
-            source_image,
-            H,
-            (reference_image.shape[1], reference_image.shape[0])
+    try:
+        result = await run_in_threadpool(
+            analyze_pair,
+            reference_path,
+            source_path,
+            job_dir,
+            f"/data/uploads/{job_id}",
+            reference_gsd,
+            source_gsd,
         )
-        
-        registered_path = os.path.join(upload_dir, "registered.jpg")
-
-        cv2.imwrite(registered_path, registered_image)
-
-        rmse = geometric_metrics["rmse"]
-        max_error = geometric_metrics["max_error"]
-        inlier_count = geometric_metrics["inlier_count"]
-        inlier_ratio = geometric_metrics["inlier_ratio"]
-        spatial_coverage = geometric_metrics["spatial_coverage"]
-        uniformity_score = geometric_metrics["uniformity_score"]
-        quality_assessment = assess_registration_quality(geometric_metrics)
-                
-
-        
-    
-    except Exception as e:
-      print("ERROR:", repr(e))
-      return {
-        "status": "error",
-        "message": str(e)
-    }
+    except ValueError as error:
+        # Unreadable images, or too few matches / tie points to register the pair.
+        return _error(422, str(error))
+    except Exception as error:
+        print("ERROR:", repr(error))
+        return _error(500, "Registration failed")
 
     return {
-    "status": "success",
-    "source_filename": source.filename,
-    "reference_filename": reference.filename,
-    "result": {
-        "matches": [
-            {
-                "source": source_keypoints[m.queryIdx].pt,
-                "reference": reference_keypoints[m.trainIdx].pt,
-                "distance": float(m.distance)
-            }
-            for m in inlier_matches
-        ],
-        "transformation": H.tolist(),
-        "metrics": {
-            "rmse": rmse,
-            "max_error": max_error,
-            "inlier_count": inlier_count,
-            "inlier_ratio": inlier_ratio,
-            "spatial_coverage": spatial_coverage,
-            "occupied_cells": geometric_metrics["occupied_cells"],
-             "uniformity_score": uniformity_score
-        },
-        "quality_assessment": quality_assessment,
-        "registered_image": "/data/uploads/registered.jpg",
-        "inlier_matches_image": "/data/uploads/inlier_matches.jpg",
-            
-    
- 
+        "status": "success",
+        "job_id": job_id,
+        "source_filename": source.filename,
+        "reference_filename": reference.filename,
+        "result": result,
     }
-}

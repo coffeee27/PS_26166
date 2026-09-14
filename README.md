@@ -73,21 +73,35 @@ Runs on http://localhost:8000.
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /health` | Liveness check |
-| `POST /api/registration/analyze` | Accepts `source` + `reference` uploads, returns match points, transform and metrics |
+| `POST /api/registration/analyze` | Accepts `source` + `reference` uploads (PNG/JPG/WebP/TIFF, optional `source_gsd` / `reference_gsd` in m/px), returns tie points, metrics, quality assessment and image URLs (registered, overlay, error heatmap, tie points) |
+
+Tests: `cd backend && pip install -r requirements-dev.txt && pytest`
+
+Accuracy on the real Vikram landing-site pair (needs the files in `backend/data/vikram_site/`):
+
+```bash
+cd backend && python scripts/evaluate_vikram_site.py --save
+```
 
 ## Current status
 
-The backend implements a **classical baseline**: SIFT feature detection, brute-force
-matching, RANSAC homography estimation, and RMSE / inlier count / inlier ratio.
-This is the benchmark that the illumination-invariant method is measured against —
-not the final approach.
+The registration engine (`backend/app/registration/`) runs coarse to fine:
+
+1. Resample the source to the reference ground resolution when both are known
+2. SIFT on half-resolution images, RootSIFT descriptors, FLANN matching with ratio and mutual checks, MAGSAC++ homography, grid-balanced refit
+3. A regular grid of tie points refined to sub-pixel precision by normalised cross-correlation, outliers removed with a MAD test
+4. Geometric model (homography or polynomial of degree 2-5) chosen by **spatial-block hold-out RMSE**, then a second refinement pass through that model
+
+`metrics.rmse` is a held-out error: each tie point is predicted by a model that never saw
+its part of the image. On the Vikram landing-site OHRC / LROC NAC pair this is 0.59 px
+(0.59 m), against 1.26 px for the earlier SIFT + RANSAC baseline.
+
+Built with OpenCV (SIFT, FLANN, USAC MAGSAC++), NumPy and tifffile.
 
 Not yet implemented:
 
-- Metadata-driven coarse alignment (PDS4 label parsing, common projection and GSD)
-- Illumination-invariant descriptors (phase congruency / RIFT)
-- Sub-pixel refinement
-- Uniform tie-point distribution enforcement
+- PDS4 label parsing for GSD and footprint (loading PDS4 arrays works)
+- Illumination-invariant descriptors (phase congruency / RIFT) for strongly different sun angles
 - Orthorectification against a DEM
 
 The frontend is not yet wired to the backend — `src/services/matchingService.ts`

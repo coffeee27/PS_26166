@@ -52,6 +52,7 @@ class RegistrationResult:
     mapping: Predict  # reference pixels -> native source pixels
     reference_points: np.ndarray  # (N, 2) final tie points, reference pixels
     source_points: np.ndarray  # (N, 2) matching native source pixels
+    holdout_errors: np.ndarray  # (N,) held-out error of each tie point, reference pixels
     holdout_rmse: float  # spatial-block hold-out RMSE, reference pixels
     fit_rmse: float
     model_rmse: dict[str, float]  # hold-out RMSE of every candidate model
@@ -155,6 +156,7 @@ def register(
         mapping=lambda points: resampling.to_native(fitted(points)),
         reference_points=ref_points,
         source_points=resampling.to_native(src_points),
+        holdout_errors=selection.report.errors,
         holdout_rmse=selection.report.rmse,
         fit_rmse=selection.report.fit_rmse,
         model_rmse={name: report.rmse for name, report in selection.reports.items()},
