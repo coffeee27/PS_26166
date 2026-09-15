@@ -3,6 +3,7 @@ import { Compass, Mountain, Crosshair, Grid, ShieldCheck, FileCheck, Hourglass }
 import { useTranslation } from '../../../i18n';
 import { LUNAR } from '../lunarImages';
 import { REAL } from '../realData';
+import { PROVE_DATA } from '../proveData';
 import { ACCENT, AMBER, RED, hash, usePauseOffscreen } from '../utils';
 import { SectionHeading } from '../shared';
 
@@ -173,11 +174,13 @@ const OutlierVisual: React.FC = () => {
 const ReportVisual: React.FC = () => {
   // The output of the real Vikram landing-site run.
   const m = REAL.metrics;
+  const vikram = PROVE_DATA.samples.find((s) => s.id === 'vikram-landing-site');
   const lines: Array<{ text: string; tone: 'cmd' | 'ok' | 'file' | 'dim' }> = [
     { text: '$ register --ref nac_site.tif --src ohrc_site.tif', tone: 'cmd' },
     { text: `✓ ${m.putativeMatches.toLocaleString('en-US')} matches · ${m.coarseInliers.toLocaleString('en-US')} kept by MAGSAC++`, tone: 'ok' },
     { text: `✓ ${m.tiePoints.toLocaleString('en-US')} sub-pixel tie points`, tone: 'ok' },
     { text: `✓ tested on unseen blocks · ${m.holdoutRmsePx.toFixed(2)} px`, tone: 'ok' },
+    { text: `✓ PROVE ${vikram && 'passed' in vikram ? `${vikram.passed}/${vikram.total} · ${vikram.outcome}` : '—'}`, tone: 'ok' },
     { text: '→ registered.tif  (GeoTIFF)', tone: 'file' },
     { text: '→ tie_points.csv  (error per point)', tone: 'file' },
     { text: '→ report.json', tone: 'file' },

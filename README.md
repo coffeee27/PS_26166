@@ -120,7 +120,7 @@ Honest error of every shape model, on the same 2,035 tie points:
 | Photo vs image made from NASA's height map (different kind of data) | **0.48 px = 1.44 m**, 5/5 STRONG |
 | OHRC shrunk to 5 m per pixel (like TMC-2) | **0.89 px**, 4/5 MODERATE |
 | Two images of different places | **Refused** in under 1 second |
-| Sun from the opposite side (image made from the height map) | Match score flips from **+0.69 to −0.68**. The pattern is still there, only upside down. This is our biggest open problem. |
+| Sun from the opposite side (image made from the height map, Sun 10° high) | Shading agreement with the NAC photo flips from **+0.70** (Sun at 330°) **to −0.68** (Sun at 150°). The pattern is still there, only upside down. This is our biggest open problem. |
 | Reading a real Chandrayaan-2 **IIRS** file (PDS4 format) | The band we read matches the product's own preview image with **0.88** correlation |
 | Reading NASA's height map of the landing site | Heights 502 to 555 m, matching the published landing-site height of about 532 m |
 | Automated tests | **41 tests**, all passing |
@@ -243,7 +243,7 @@ We made the same real OHRC image harder and harder to match by shrinking it (lik
 | 1 m (original) | 0.50 px | 90% | 95% | 5 / 5 | 🟢 STRONG |
 | 3 m | 0.57 px | 89% | 94% | 5 / 5 | 🟢 STRONG |
 | **5 m** (about TMC-2) | **0.89 px** | 77% | **79%** ❌ | **4 / 5** | 🟡 **MODERATE** |
-| 8 m | 1.81 px ❌ | 46% ❌ | 0% ❌ | 2 / 5 | 🔴 WEAK |
+| 8 m | 1.82 px ❌ | 46% ❌ | 0% ❌ | 2 / 5 | 🔴 WEAK |
 | 10 m | 1.92 px ❌ | 41% ❌ | 2% ❌ | 2 / 5 | 🔴 WEAK |
 
 *(The 3 m, 8 m and 10 m rows were one-off experiments; 1 m and 5 m are demo buttons on the website.)*
@@ -255,7 +255,7 @@ We made the same real OHRC image harder and harder to match by shrinking it (lik
 | 🟢 **High accuracy** | Vikram pair (0.50 px) | Aligns, all 5 checks pass | Green ACCEPTED, sub-pixel ACHIEVED, **PROVE 5/5 STRONG**, mostly blue heatmap, grey overlay |
 | 🟡 **Medium: accuracy dropping** | Zoom gap 5 m (0.89 px) | Aligns, but some regions are weaker | ACCEPTED, sub-pixel ACHIEVED, **PROVE 4/5 MODERATE**, "Image cells with error ≤ 1 px: 79%" in red, more orange and red spots on the heatmap |
 | 🟡 **Medium: good but incomplete proof** | Half overlap (0.53 px) | What overlaps is accurate, half the image has no points | ACCEPTED, **PROVE 3/5 MODERATE**, coverage 48% and evenness 0.47 in red, overlay half pink (no match) and half grey |
-| 🔴 **Low accuracy** | OHRC at 8 m (1.81 px) | Aligns roughly, error above 1 px | Sub-pixel NOT ACHIEVED, **PROVE 2/5 WEAK** |
+| 🔴 **Low accuracy** | OHRC at 8 m (1.82 px) | Aligns roughly, error above 1 px | Sub-pixel NOT ACHIEVED, **PROVE 2/5 WEAK** |
 | 🔴 **Error too large** | Any pair above 3 px | Quality decision fails | Red REJECTED with the reason "RMSE is too high" |
 | ⛔ **No match at all** | Two different places | Stops after the rough step: only 4 or 5 of 20 to 28 matches agree, 20 are needed | Red **REGISTRATION FAILED** box: *"The two images may not show the same area, may overlap too little, or may differ too much in lighting or scale."* No score, no fake result |
 
@@ -308,6 +308,7 @@ The demo files are made by [`backend/scripts/build_demo_samples.py`](backend/scr
 - The three Chandrayaan-2 cameras (real OHRC and IIRS frames)
 - Real metrics from the Vikram run
 - A "Coming next" list
+- **PROVE section:** the full form, the five checks and their limits, what PROVE said on each of the 5 demo pairs, an "accuracy as detail drops" chart, and the sun-flip result
 
 **Workstation (all pages use real engine results, no demo data):**
 
@@ -351,7 +352,7 @@ English and Hindi. Some newer text (the PROVE card, sample labels, landing page 
 - [x] Comparison with the old SIFT + RANSAC method (1.26 px, 24 points, 25% coverage)
 - [x] Photo vs height-map image: 0.48 px
 - [x] Accuracy vs zoom gap experiment (1, 3, 5, 8, 10 m)
-- [x] Sun-flip experiment (+0.69 → −0.68 match score)
+- [x] Sun-flip experiment (+0.70 → −0.68 shading agreement)
 - [x] Evaluation script for the real pair: `backend/scripts/evaluate_vikram_site.py`
 
 ### Backend and website
@@ -402,7 +403,7 @@ Ordered by importance.
 ### 🟢 Nice to have
 
 - [ ] Before / after swipe slider
-- [ ] "Accuracy vs zoom" and "accuracy vs sun angle" graphs on the website and slides
+- [ ] "Accuracy vs sun angle" graph (the "accuracy vs zoom" chart is already on the landing page)
 - [ ] Shadow masking using the sun angle and height map
 - [ ] Removing terrain distortion with an elevation model (orthorectification)
 - [ ] Faster runs (the local correction raised a 2 km pair from about 9 s to 15 to 35 s)
@@ -518,6 +519,7 @@ pytest
 - **Text:** the interface text lives in `frontend/src/i18n/en.ts` and `hi.ts`. `t()` is typed against `en`, so a missing English key is a compile error, while a missing Hindi key falls back to English.
 - **Hero animation:** frames are WebP images in `frontend/public/hero/`. To replace the video, run `python scripts/extract_hero_frames.py "path/to/video.mp4"` in `frontend/`, and update `HERO_FRAME_COUNT` in `src/components/landing/ScrollVideoHero.tsx` if the frame count changes.
 - **Landing images and numbers:** `python scripts/build_landing_assets.py` in `frontend/` rebuilds them from a real engine run.
+- **Landing PROVE section:** `python scripts/build_prove_data.py` in `frontend/` re-runs the 5 demo pairs, the zoom sweep and the sun-flip test, and writes `src/components/landing/proveData.ts` (build the demo pairs first).
 
 ---
 

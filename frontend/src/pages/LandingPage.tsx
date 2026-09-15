@@ -11,6 +11,7 @@ import { CapabilitiesSection } from '../components/landing/sections/Capabilities
 import { PipelineSection } from '../components/landing/sections/PipelineSection';
 import { PayloadsSection } from '../components/landing/sections/PayloadsSection';
 import { MetricsSection } from '../components/landing/sections/MetricsSection';
+import { ProveSection } from '../components/landing/sections/ProveSection';
 import { FinalCtaSection } from '../components/landing/sections/FinalCtaSection';
 
 /*
@@ -58,6 +59,7 @@ export const LandingPage: React.FC = () => {
     { href: '#capabilities', label: t('landingNavCapabilities') },
     { href: '#pipeline', label: t('landingNavPipeline') },
     { href: '#payloads', label: t('landingNavSensors') },
+    { href: '#prove', label: t('landingNavProve') },
   ];
 
   return (
@@ -121,6 +123,7 @@ export const LandingPage: React.FC = () => {
       <PipelineSection />
       <PayloadsSection />
       <MetricsSection />
+      <ProveSection />
       <FinalCtaSection />
 
       {/* ============================= FOOTER ============================ */}
