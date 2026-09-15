@@ -39,14 +39,12 @@ export const ImageMetadata: React.FC<ImageMetadataProps> = ({ metadata }) => {
         </div>
 
         {metadata.sensor && (
-          <div className="flex items-center justify-between col-span-2">
-            <span className="flex items-center">
+          <div className="flex items-start justify-between gap-3 col-span-2">
+            <span className="flex items-center shrink-0">
               <Radio className="w-3 h-3 mr-1 text-[#176B87]" />
               {t('sensor')}:
             </span>
-            <span className="font-semibold text-[#17212B] truncate max-w-[260px]" title={metadata.sensor}>
-              {metadata.sensor}
-            </span>
+            <span className="font-semibold text-[#17212B] text-right">{metadata.sensor}</span>
           </div>
         )}
       </div>
