@@ -1,7 +1,7 @@
 import React from 'react';
 import type { RegistrationResult } from '../../types/matching';
 import { useTranslation } from '../../i18n';
-import { Ruler, Maximize2, Info, Sigma } from 'lucide-react';
+import { Ruler, Maximize2, Info, Sigma, Map } from 'lucide-react';
 import { formatMetres, formatPx, modelLabel } from '../../utils/registration';
 
 const Field: React.FC<{ label: string; value: string; icon: React.ReactNode }> = ({ label, value, icon }) => (
@@ -31,6 +31,11 @@ export const GeospatialPanel: React.FC<{ result: RegistrationResult }> = ({ resu
           label={t('holdoutRmse')}
           value={`${formatPx(result.holdoutRmsePx)}${result.holdoutRmseM !== null ? ` · ${formatMetres(result.holdoutRmseM)}` : ''}`}
           icon={<Sigma className="w-3 h-3" />}
+        />
+        <Field
+          label={t('mapCoordinates')}
+          value={result.georeferenced ? t('mapCoordinatesYes') : t('mapCoordinatesNo')}
+          icon={<Map className="w-3 h-3" />}
         />
       </div>
 
