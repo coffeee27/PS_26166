@@ -127,7 +127,7 @@ Honest error of every shape model, on the same 2,035 tie points:
 
 ---
 
-## 4. 🛠️ How it works: the full workflow
+## 4. 🔧 How it works: the full workflow
 
 ```mermaid
 flowchart TD
@@ -234,7 +234,7 @@ Image cells with error ≤ 1 px   79%     ≥ 90%       ❌
 
 ---
 
-## 6. 🎚️ What happens when accuracy is high, medium, low or zero
+## 6. 📶 What happens when accuracy is high, medium, low or zero
 
 We made the same real OHRC image harder and harder to match by shrinking it (like using a camera with less detail), then matched it to the 1 m NAC image:
 
@@ -420,7 +420,7 @@ Ordered by importance.
 
 ---
 
-## 12. ⚠️ Honest limitations
+## 12. 🚧 Honest limitations
 
 1. **One real photo pair so far.** More pairs are needed before we can call the engine general.
 2. **No independent answer key.** The honest error is checked against our own correlation points. A steady shading bias would not show up; known-answer tests and more real pairs are the cross-check.
@@ -534,7 +534,7 @@ A pair that cannot be registered returns **HTTP 422** with a plain-English `mess
 
 ---
 
-## 16. 🗂️ Project layout
+## 16. 📁 Project layout
 
 ```
 PS_26166/
