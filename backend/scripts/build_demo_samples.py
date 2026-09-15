@@ -1,4 +1,4 @@
-"""Build two extra demo pairs from the Vikram landing-site data.
+"""Build extra demo pairs from the Vikram landing-site data.
 
 1. demo_different_spots: the north-west kilometre of the NAC orthophoto against the
    south-east kilometre of OHRC. The areas do not overlap, so the engine must refuse
@@ -8,6 +8,10 @@
    the NAC shading (azimuth 330 deg, elevation 10 deg). Same ground, different kind of
    data: a photograph against shaded terrain heights, with no surface brightness
    variation.
+3. demo_zoom_gap: OHRC shrunk to 5 m per pixel (about TMC-2 detail), registered onto
+   the 1 m NAC orthophoto. It still aligns, but some regions are weaker (moderate PROVE).
+4. demo_half_overlap: only the east half of OHRC against the whole NAC orthophoto.
+   What aligns is accurate, but half of the reference has no tie points (moderate PROVE).
 
 Run from backend/:  python scripts/build_demo_samples.py
 """
@@ -33,6 +37,7 @@ DTM = SITE / "nac_dtm" / "vikram_landing_site_dtm.tif"
 
 SUN_AZIMUTH = 330.0
 SUN_ELEVATION = 10.0
+ZOOM_GAP_GSD = 5.0
 _MODEL_PIXEL_SCALE = 33550
 
 
@@ -79,6 +84,21 @@ def main() -> None:
     shaded[missing] = np.nan
     write_geotiff(render / "dtm_render_3m.tif", shaded, dtm.metadata)
     print(f"wrote {render}")
+
+    zoom = DATA / "demo_zoom_gap"
+    zoom.mkdir(parents=True, exist_ok=True)
+    ohrc_gsd = 1.0  # the OHRC crop was resampled to the NAC's 1 m grid
+    size = int(round(ohrc.shape[1] * ohrc_gsd / ZOOM_GAP_GSD))
+    shrunk = cv2.resize(ohrc.data, (size, size), interpolation=cv2.INTER_AREA)
+    # Only the pixel size is tagged, so the engine knows to scale it back up before matching.
+    pixel_size = ohrc.shape[1] * ohrc_gsd / size
+    write_geotiff(zoom / "ohrc_5m.tif", shrunk, {"geotiff_tags": [(_MODEL_PIXEL_SCALE, "d", 3, (pixel_size, pixel_size, 0.0))]})
+    print(f"wrote {zoom}")
+
+    half = DATA / "demo_half_overlap"
+    half.mkdir(parents=True, exist_ok=True)
+    write_geotiff(half / "ohrc_east_half.tif", ohrc.data[:, ohrc.shape[1] // 2 :])
+    print(f"wrote {half}")
 
 
 if __name__ == "__main__":
