@@ -25,3 +25,13 @@ dist-ssr
 
 # Large research datasets and generated outputs
 data/
+
+# Except the three Vikram landing-site crops the demo pairs are built from (needed on the server).
+# Uploads, results, previews and the generated demo pairs stay ignored.
+!backend/data/
+backend/data/*
+!backend/data/vikram_site/
+backend/data/vikram_site/*
+!backend/data/vikram_site/nac_ortho/
+!backend/data/vikram_site/ohrc/
+!backend/data/vikram_site/nac_dtm/

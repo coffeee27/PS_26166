@@ -1,0 +1,19 @@
+# Render Blueprint for the registration backend (FastAPI + engine).
+# The website is deployed separately on Vercel and calls this service through VITE_API_URL.
+services:
+  - type: web
+    name: ps26166-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    # The demo pairs are built on the server from the three Vikram landing-site crops in git.
+    buildCommand: pip install -r requirements.txt && python scripts/build_demo_samples.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: CORS_ORIGINS
+        value: https://ps26166-lunar-registration.vercel.app,http://localhost:5173
+      - key: MAX_CONCURRENT_JOBS
+        value: "1"

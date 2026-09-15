@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 from pathlib import Path
@@ -16,6 +17,8 @@ DATA_DIR = BACKEND / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+# A 2000 x 2000 registration peaks near 400 MB, so small servers (512 MB) run one job at a time.
+REGISTRATION_SLOTS = asyncio.Semaphore(int(os.environ.get("MAX_CONCURRENT_JOBS", "1")))
 
 app = FastAPI(
     title="Lunar Image Matching API",
@@ -68,15 +71,16 @@ def _new_job() -> tuple[str, Path]:
 
 async def _run_job(job_id, job_dir, reference_path, source_path, reference_name, source_name, reference_gsd=None, source_gsd=None):
     try:
-        result = await run_in_threadpool(
-            analyze_pair,
-            reference_path,
-            source_path,
-            job_dir,
-            f"/data/uploads/{job_id}",
-            reference_gsd,
-            source_gsd,
-        )
+        async with REGISTRATION_SLOTS:
+            result = await run_in_threadpool(
+                analyze_pair,
+                reference_path,
+                source_path,
+                job_dir,
+                f"/data/uploads/{job_id}",
+                reference_gsd,
+                source_gsd,
+            )
     except ValueError as error:
         # Unreadable images, or too few matches / tie points to register the pair.
         return _error(422, str(error))

@@ -378,7 +378,7 @@ Ordered by importance.
 
 ### 🔴 Must do
 
-- [ ] **Deploy the prototype:** website on **Vercel**, backend on **Render** (the backend cannot run on Vercel because uploads are large and a run can take 30 s). The demo image files must also be put on the server, because `data/` is not in git.
+- [ ] **Deploy the prototype:** the website is live on **Vercel** (https://ps26166-lunar-registration.vercel.app). The backend goes on **Render** with `render.yaml`; after that, the website needs `VITE_API_URL` set to the Render URL so the workstation works online.
 - [ ] **Work under different sunlight** (our biggest gap). Today the fine step handles brighter or darker images, but not shadows that flip side. Plan:
   1. Make test images for 24 sun directions from the height map and measure where the engine fails (a "failure map").
   2. Add math-based matching that ignores flipped shadows (doubled-angle gradient orientation, sign-invariant correlation).
@@ -482,9 +482,22 @@ Runs on http://localhost:5173 and forwards `/api` and `/data` to the backend. Us
 | `npm run lint` | Oxlint |
 | `npm run preview` | Serve the production build |
 
-### Data (not in git)
+### Deployment
 
-Large images live in `backend/data/`, which is ignored by git. For the demo pairs you need:
+| Part | Where | How |
+|---|---|---|
+| Website | **Vercel**: https://ps26166-lunar-registration.vercel.app | `cd frontend && vercel deploy --prod`. `frontend/vercel.json` sends every route to the app. Set `VITE_API_URL` to the backend URL. |
+| Backend | **Render** (free plan) | Blueprint in [`render.yaml`](render.yaml): installs requirements, builds the demo pairs, starts Uvicorn. `CORS_ORIGINS` must include the website URL. |
+
+Notes for the free plan (0.1 CPU, 512 MB RAM):
+
+- One registration runs at a time (`MAX_CONCURRENT_JOBS=1`), because a 2000 × 2000 pair peaks near 400 MB.
+- Big pairs that take about 10 s on a laptop can take a few minutes, and the service sleeps after 15 minutes without requests (the first request then takes about a minute).
+- The server uses `opencv-python-headless`. If a local environment already has `opencv-python`, keep only one of the two.
+
+### Data
+
+Large images live in `backend/data/`, which is ignored by git, **except** the three Vikram landing-site crops below, which are committed so the server can build the demo pairs. For the demo pairs you need:
 
 ```
 backend/data/vikram_site/nac_ortho/vikram_landing_site_2km.tif        LRO NAC orthophoto crop, 1 m
@@ -557,7 +570,7 @@ PS_26166/
 │   │   └── services/               older one-off scripts (quality_assessment.py still used)
 │   ├── scripts/                    evaluation and demo-data scripts
 │   ├── tests/                      41 automated tests
-│   └── data/                       images and results (not in git)
+│   └── data/                       images and results (only the 3 Vikram crops are in git)
 └── frontend/
     ├── src/pages/                  landing page and workstation pages
     ├── src/components/             landing sections, matching, visualisation
