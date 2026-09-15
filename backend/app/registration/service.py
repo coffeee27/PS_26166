@@ -19,6 +19,7 @@ from app.services.quality_assessment import assess_registration_quality
 from .imaging import load_image, normalize_to_uint8, pixel_to_map, write_geotiff
 from .pipeline import RegistrationConfig, RegistrationResult, lattice_mapping, register, warp_to_reference
 from .products import cell_statistics, error_heatmap, match_visualization, overlay_image, preview_image
+from .prove import prove_score
 
 MAX_MATCHES_IN_RESPONSE = 5000
 CELL_GRID = (8, 8)
@@ -115,6 +116,14 @@ def analyze_pair(
         "transformation": _source_to_reference_homography(result.reference_points, result.source_points),
         "metrics": metrics,
         "quality_assessment": assess_registration_quality(metrics),
+        "prove": prove_score(
+            result.holdout_rmse,
+            result.stats["putative_matches"],
+            result.stats["coarse_inliers"],
+            result.coverage.coverage,
+            result.coverage.uniformity,
+            cells,
+        ),
         **urls,
         "engine": {
             **result.summary(),

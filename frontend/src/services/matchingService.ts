@@ -1,4 +1,4 @@
-import type { RegistrationResult, SamplePair, SampleImage } from '../types/matching';
+import type { ProveScore, RegistrationResult, SamplePair, SampleImage } from '../types/matching';
 
 // Empty base = same origin; the Vite dev server proxies /api and /data to the backend.
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
@@ -53,6 +53,7 @@ interface ApiAnalyzeResponse {
       uniformity_score: number;
     };
     quality_assessment: { status: 'ACCEPTED' | 'REJECTED'; subpixel_accuracy: 'ACHIEVED' | 'NOT_ACHIEVED'; reasons: string[] };
+    prove: ProveScore;
     registered_image: string;
     overlay_image: string;
     error_heatmap_image: string;
@@ -122,6 +123,7 @@ function toResult(response: ApiAnalyzeResponse, processingTimeMs: number): Regis
     subpixelAccuracy: quality.subpixel_accuracy,
     qualityStatus: quality.status,
     qualityReasons: quality.reasons,
+    prove: result.prove,
     referenceGsd: engine.reference_gsd,
     sourceGsd: engine.source_gsd,
     referenceShape: engine.reference_shape,

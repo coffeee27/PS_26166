@@ -4,6 +4,7 @@ import { useTranslation } from '../../i18n';
 import { FileCheck, FileJson, FileSpreadsheet, Printer, Cpu, ArrowRight, Target, Crosshair, Grid3x3, Gauge, ExternalLink, Map } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MetricTile, QualityBanner } from './RegistrationSummary';
+import { ProveCard } from './ProveCard';
 import { downloadReport, formatMetres, formatPercent, formatPx, modelLabel } from '../../utils/registration';
 
 export const AnalysisSummary: React.FC<{ result: RegistrationResult }> = ({ result }) => {
@@ -60,6 +61,7 @@ export const AnalysisSummary: React.FC<{ result: RegistrationResult }> = ({ resu
       </div>
 
       <QualityBanner result={result} />
+      <ProveCard prove={result.prove} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricTile

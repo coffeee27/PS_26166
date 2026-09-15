@@ -45,6 +45,10 @@ def test_analyze_registers_pair_and_keeps_response_shape(client, tmp_path, lunar
     assert result["quality_assessment"]["subpixel_accuracy"] == "ACHIEVED"
     assert result["engine"]["holdout_rmse_m"] == pytest.approx(result["metrics"]["rmse"], abs=1e-3)
     assert len(result["engine"]["cells"]) == 64
+    prove = result["prove"]
+    assert prove["total"] == 5 and len(prove["checks"]) == 5
+    assert prove["passed"] == sum(check["passed"] for check in prove["checks"])
+    assert next(c for c in prove["checks"] if c["id"] == "subpixel")["passed"]
 
     # Tie points agree with the true source position of each reference point.
     match = np.array([[m["reference"], m["source"]] for m in result["matches"]])

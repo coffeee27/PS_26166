@@ -24,6 +24,28 @@ export interface GridCell {
   rmsePx: number | null;
 }
 
+export type ProveCheckId = 'subpixel' | 'agreement' | 'coverage' | 'evenness' | 'good_cells';
+export type EvidenceLevel = 'STRONG' | 'MODERATE' | 'WEAK';
+
+/** One measured PROVE check: a value the engine measured against a fixed limit. */
+export interface ProveCheck {
+  id: ProveCheckId;
+  label: string;
+  value: number | null;
+  limit: number;
+  comparison: '<=' | '>=';
+  unit: 'px' | '%' | '';
+  passed: boolean;
+}
+
+export interface ProveScore {
+  passed: number;
+  total: number;
+  evidence: EvidenceLevel;
+  checks: ProveCheck[];
+  note: string;
+}
+
 export interface RegistrationImages {
   registered: string;
   overlay: string;
@@ -60,6 +82,7 @@ export interface RegistrationResult {
   subpixelAccuracy: SubpixelStatus;
   qualityStatus: QualityStatus;
   qualityReasons: string[];
+  prove: ProveScore;
 
   referenceGsd: number | null;
   sourceGsd: number | null;
