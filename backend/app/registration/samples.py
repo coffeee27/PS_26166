@@ -38,6 +38,26 @@ SAMPLES = (
         reference="vikram_site/nac_ortho/vikram_landing_site_2km.tif",
         source="vikram_site/ohrc/vikram_landing_site_2km_ohrc_1m.tif",
     ),
+    Sample(
+        id="photo-vs-height-render",
+        title="Photo vs height-map render (same site)",
+        title_hi="फोटो बनाम ऊँचाई-मानचित्र (वही स्थल)",
+        description="Same 2 km around the Vikram landing site, but a different kind of image: the LROC NAC photo against a picture rendered from the LROC height map (DTM) with a similar Sun. Looks different, should still align.",
+        reference_label="LRO NAC orthophoto · resized to 3 m/px",
+        source_label="Rendered from LROC DTM · 3 m/px · Sun 330°, 10° high",
+        reference="demo_height_render/nac_photo_3m.tif",
+        source="demo_height_render/dtm_render_3m.tif",
+    ),
+    Sample(
+        id="different-spots",
+        title="Two different spots (should be rejected)",
+        title_hi="दो अलग जगहें (अस्वीकार होना चाहिए)",
+        description="North-west kilometre of the NAC photo against the south-east kilometre of the OHRC image. The areas do not overlap, so the engine should refuse the pair and explain why.",
+        reference_label="LRO NAC orthophoto · north-west 1 km · 1 m/px",
+        source_label="Chandrayaan-2 OHRC · south-east 1 km · 1 m/px",
+        reference="demo_different_spots/nac_northwest_1km.tif",
+        source="demo_different_spots/ohrc_southeast_1km.tif",
+    ),
 )
 
 
