@@ -367,7 +367,7 @@ English and Hindi. Some newer text (the PROVE card, sample labels, landing page 
 ### Quality and documents
 
 - [x] **41 automated tests**, all passing (`cd backend && pytest`)
-- [x] Solution document updated (15 September 2026)
+- [x] Solution document updated (23 September 2026) — [`docs/PS26166_Solution_Document.docx`](docs/PS26166_Solution_Document.docx)
 - [x] Slide text for the idea presentation
 
 ---
