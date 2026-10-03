@@ -35,3 +35,19 @@ backend/data/vikram_site/*
 !backend/data/vikram_site/nac_ortho/
 !backend/data/vikram_site/ohrc/
 !backend/data/vikram_site/nac_dtm/
+
+# The TMC-2 archive index is a small reference table the catalogue script needs.
+# Listings it generates stay ignored.
+!backend/data/catalogues/
+backend/data/catalogues/*
+!backend/data/catalogues/tmc2_archive_products.csv
+
+# Internal team status notes, not for the public repo.
+INTERNAL_STATUS.md
+
+# Python virtualenv, caches and test artefacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
