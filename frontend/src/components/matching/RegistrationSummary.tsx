@@ -3,7 +3,7 @@ import type { RegistrationResult } from '../../types/matching';
 import { useTranslation } from '../../i18n';
 import { ShieldCheck, ShieldAlert, Target, Crosshair, Grid3x3, Spline, Layers } from 'lucide-react';
 import { formatMetres, formatPercent, formatPx, modelLabel } from '../../utils/registration';
-import { ProveCard } from './ProveCard';
+import { ProveCard, ResidualCard } from './ProveCard';
 
 interface MetricTileProps {
   icon: React.ReactNode;
@@ -67,6 +67,7 @@ export const RegistrationSummary: React.FC<{ result: RegistrationResult }> = ({ 
     <div className="space-y-4">
       <QualityBanner result={result} />
       <ProveCard prove={result.prove} />
+      <ResidualCard residual={result.residual} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricTile

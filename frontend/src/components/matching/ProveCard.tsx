@@ -1,5 +1,5 @@
 import React from 'react';
-import type { EvidenceLevel, ProveCheck, ProveScore } from '../../types/matching';
+import type { EvidenceLevel, ProveCheck, ProveScore, ResidualReport } from '../../types/matching';
 import { useTranslation } from '../../i18n';
 import { CheckCircle2, XCircle, BadgeCheck } from 'lucide-react';
 import { formatPercent, formatPx } from '../../utils/registration';
@@ -17,6 +17,40 @@ const formatValue = (value: number | null, unit: ProveCheck['unit']) => {
   return value.toFixed(2);
 };
 
+/* ---- The leftover map: measured from the pixels, never from the tie points. A second
+   opinion on the same images, so it sits outside PROVE's independent layer. ---- */
+export const ResidualCard: React.FC<{ residual: ResidualReport }> = ({ residual }) => {
+  const { t } = useTranslation();
+  const stat = (label: string, value: string) => (
+    <div>
+      <span className="text-[10px] text-[#5B6875] uppercase tracking-wider block">{label}</span>
+      <span className="text-lg font-bold text-[#17212B]">{value}</span>
+    </div>
+  );
+  return (
+    <div className="rounded-lg border border-[#C2186F]/30 bg-[#C2186F]/[0.04] p-4">
+      <span className="text-[10px] text-[#C2186F] uppercase tracking-wider font-bold block">{t('residualTitle')}</span>
+      <p className="mt-1.5 text-xs text-[#5B6875]">{t('residualDesc')}</p>
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        {stat(t('residualMedian'), `${residual.medianPx.toFixed(2)} px`)}
+        {stat(t('residualSystematic'), `${residual.systematicPx.toFixed(2)} px`)}
+        {stat(t('residualWindows'), `${residual.windowsMeasured} / ${residual.windowsTotal}`)}
+      </div>
+      <p className="mt-2 text-[11px] text-[#5B6875]">
+        {Math.round(residual.withinTau * 100)}% {t('residualWithin')} {residual.tauPx.toFixed(1)} px
+      </p>
+      <details className="mt-3">
+        <summary className="text-[11px] text-[#C2186F] cursor-pointer">{t('residualLimitsTitle')}</summary>
+        <ul className="mt-1.5 space-y-1">
+          {residual.limits.map((line) => (
+            <li key={line} className="text-[11px] text-[#5B6875] leading-relaxed">{line}</li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+};
+
 export const ProveCard: React.FC<{ prove: ProveScore }> = ({ prove }) => {
   const { t } = useTranslation();
   const style = EVIDENCE_STYLE[prove.evidence];
@@ -26,6 +60,7 @@ export const ProveCard: React.FC<{ prove: ProveScore }> = ({ prove }) => {
     coverage: t('proveCheckCoverage'),
     evenness: t('proveCheckEvenness'),
     good_cells: t('proveCheckGoodCells'),
+    two_factor: t('proveCheckTwoFactor'),
   };
   const evidenceLabel: Record<EvidenceLevel, string> = {
     STRONG: t('evidenceStrong'),
@@ -72,7 +107,7 @@ export const ProveCard: React.FC<{ prove: ProveScore }> = ({ prove }) => {
         ))}
       </ul>
 
-      <p className="text-[10px] text-[#5B6875]">{t('proveNote')}</p>
+      <p className="text-[10px] text-[#5B6875]">{t('suffNote')}</p>
     </div>
   );
 };

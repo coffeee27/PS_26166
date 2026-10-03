@@ -24,7 +24,7 @@ export interface GridCell {
   rmsePx: number | null;
 }
 
-export type ProveCheckId = 'subpixel' | 'agreement' | 'coverage' | 'evenness' | 'good_cells';
+export type ProveCheckId = 'subpixel' | 'agreement' | 'coverage' | 'evenness' | 'good_cells' | 'two_factor';
 export type EvidenceLevel = 'STRONG' | 'MODERATE' | 'WEAK';
 
 /** One measured PROVE check: a value the engine measured against a fixed limit. */
@@ -36,6 +36,19 @@ export interface ProveCheck {
   comparison: '<=' | '>=';
   unit: 'px' | '%' | '';
   passed: boolean;
+}
+
+/** PROVE's leftover map: misalignment measured from the pixels, never from the tie points. */
+export interface ResidualReport {
+  medianPx: number;
+  p90Px: number;
+  /** Length of the median residual vector. Near zero means no shared bias. */
+  systematicPx: number;
+  withinTau: number;
+  tauPx: number;
+  windowsMeasured: number;
+  windowsTotal: number;
+  limits: string[];
 }
 
 export interface ProveScore {
@@ -77,12 +90,15 @@ export interface RegistrationResult {
   tiePointCount: number;
   inlierRatio: number;
   spatialCoverage: number;
+  /** Share of the WHOLE reference with tie points. `spatialCoverage` judges only the overlap. */
+  referenceCoverage: number;
   uniformityScore: number;
 
   subpixelAccuracy: SubpixelStatus;
   qualityStatus: QualityStatus;
   qualityReasons: string[];
   prove: ProveScore;
+  residual: ResidualReport;
 
   referenceGsd: number | null;
   sourceGsd: number | null;

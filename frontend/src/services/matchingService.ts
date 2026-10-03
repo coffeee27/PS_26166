@@ -50,10 +50,21 @@ interface ApiAnalyzeResponse {
       inlier_count: number;
       inlier_ratio: number;
       spatial_coverage: number;
+      reference_coverage: number;
       uniformity_score: number;
     };
     quality_assessment: { status: 'ACCEPTED' | 'REJECTED'; subpixel_accuracy: 'ACHIEVED' | 'NOT_ACHIEVED'; reasons: string[] };
     prove: ProveScore;
+    residual: {
+      median_px: number;
+      p90_px: number;
+      systematic_px: number;
+      within_tau: number;
+      tau_px: number;
+      windows_measured: number;
+      windows_total: number;
+      limits: string[];
+    };
     registered_image: string;
     overlay_image: string;
     error_heatmap_image: string;
@@ -119,11 +130,22 @@ function toResult(response: ApiAnalyzeResponse, processingTimeMs: number): Regis
     tiePointCount: metrics.inlier_count,
     inlierRatio: metrics.inlier_ratio,
     spatialCoverage: metrics.spatial_coverage,
+    referenceCoverage: metrics.reference_coverage,
     uniformityScore: metrics.uniformity_score,
     subpixelAccuracy: quality.subpixel_accuracy,
     qualityStatus: quality.status,
     qualityReasons: quality.reasons,
     prove: result.prove,
+    residual: {
+      medianPx: result.residual.median_px,
+      p90Px: result.residual.p90_px,
+      systematicPx: result.residual.systematic_px,
+      withinTau: result.residual.within_tau,
+      tauPx: result.residual.tau_px,
+      windowsMeasured: result.residual.windows_measured,
+      windowsTotal: result.residual.windows_total,
+      limits: result.residual.limits,
+    },
     referenceGsd: engine.reference_gsd,
     sourceGsd: engine.source_gsd,
     referenceShape: engine.reference_shape,
