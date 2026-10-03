@@ -19,7 +19,7 @@ Organisation: ISRO / Department of Space · Category: Software · Theme: Space T
 2. [Our answer, in one minute](#2--our-answer-in-one-minute)
 3. [Our numbers](#3--our-numbers)
 4. [How it works: the full workflow](#4--how-it-works-the-full-workflow)
-5. [PROVE and the PROVE score (under the hood)](#5--prove-and-the-prove-score-under-the-hood)
+5. [PROVE (under the hood)](#5--prove-under-the-hood)
 6. [What happens when accuracy is high, medium, low or zero](#6--what-happens-when-accuracy-is-high-medium-low-or-zero)
 7. [The 5 demo pairs](#7--the-5-demo-pairs)
 8. [What you get from every run](#8--what-you-get-from-every-run)
@@ -166,28 +166,69 @@ flowchart TD
 
 ---
 
-## 5. 🔬 PROVE and the PROVE score (under the hood)
+## 5. 🔬 PROVE (under the hood)
 
-### What is PROVE?
+### What PROVE is
 
-**PROVE = Predict, Refine, Only-if Validated Estimation**
+**PROVE decides whether to trust an alignment, using only measurements the registration could not have faked.**
 
-It is the name of our method, and it describes how the engine thinks:
+The engine (ALIGN) lines the two images up. PROVE is a separate layer whose only job is to judge that result. It is the part of this project that is ours.
 
-| Letter | Word | In our engine |
-|---|---|---|
-| **P** | **Predict** | The current model predicts where each point should land in the source image. |
-| **R** | **Refine** | Correlation searches a small window around that prediction and finds the exact spot, to a fraction of a pixel. |
-| **O-V** | **Only-if Validated** | A more complex correction (like the local terrain correction) is kept **only if** it predicts unseen image blocks better. Otherwise the simpler model stays. |
-| **E** | **Estimation** | The final shape of the transformation is estimated from all validated points. |
+### Why it exists
 
-We built PROVE from well-known building blocks (SIFT, MAGSAC++, correlation, least squares, splines, credited in section 17). The pipeline, the hold-out gate and the lunar-specific design are ours.
+Most registration software grades itself with the very points it produced.
 
-### What is the PROVE score?
+If the matcher makes a *consistent* mistake, for example locking onto a shadow edge instead of a crater rim because the Sun moved, then **every** tie point shifts the same way. The model fits those shifted points perfectly, the RMSE stays small, and every self-reported number looks excellent. The images are still misaligned.
 
-The PROVE score answers one question: **how much evidence do we have that this registration is right?**
+Holding out your own points does not catch this, because the held-out points carry the same bias as the ones you fitted on. That is a **confidently wrong answer**, and removing it is the point of PROVE.
 
-It is **not** a made-up number like "94/100". It is **5 measured checks**. Each check compares a number the engine measured with a fixed limit, and the website shows both.
+### The rule
+
+```python
+prove(reference, source, mapping) -> verdict
+```
+
+**PROVE never sees the correspondences.** It gets two images and a claimed mapping, and nothing else. It never asks *how* the answer was made.
+
+This is meant to be enforced by imports, not by discipline: if `prove.py` cannot import from `matching.py` or `subpixel.py`, the circularity is impossible by construction, and a reviewer can check it by reading one import block.
+
+### What "independent" is allowed to mean
+
+There is a hard limit worth stating before the checks: **anything that reads the two images is not independent of those images.** That is logic, not a gap in the design. A verifier looking at the same pixels can be fooled by the same pixels.
+
+So PROVE splits its evidence in two, and only one half gets to use the word.
+
+### Tier 1: independent evidence ⏳ *(in development)*
+
+Facts that came from **outside the two images**. None of it was produced by our software, and none of it is derived from the map we aligned to.
+
+| # | Check | Where the truth comes from | Why it is independent |
+|---|---|---|---|
+| 1 | **Ground control** | Published lunar coordinates, starting with the Vikram lander and extending to LOLA-controlled points across the frame | A fact about the Moon, not about our run. Catches a self-consistent alignment of the **wrong** crater. |
+| 2 | **Sun check** | A height model rendered twice, once at each image's Sun geometry | Runs on terrain, not on appearance, so it measures illumination bias that no image-to-image check can see. Independent only when the height model comes from a different instrument than the reference. |
+| 3 | **Cross-source check** | The same ground from a different mission, for example Kaguya TC | Different agency, spacecraft, camera and processing chain. Nothing in the LRO chain can explain away an agreement here. |
+
+### Tier 2: a second opinion, not independent evidence
+
+| # | Check | What it uses | What it is honestly worth |
+|---|---|---|---|
+| 4 | **Leftover map** | Phase correlation on tiles of the aligned pair, in the frequency domain | A **different operator on the same pixels**. No patch search, so no correlation peak for a shadow to pull off-centre, and a non-zero **mean** residual is a systematic shift that hold-out cannot see. It is not independent evidence and we do not call it that. |
+
+A correct result leaves residuals that are **small**, **centred on zero** and **structureless**. Each property fails differently, so PROVE reports *which kind* of wrong, not just how wrong.
+
+Honest limits we already know:
+
+- **Tier 2 shares the pixels with the matcher.** Say "decorrelated failure modes", never "independent". If shadows genuinely move where a rim appears, the matcher and the leftover map see the same displaced rim and agree with each other. Only Tier 1 catches that.
+- **Our current DTM is NAC-derived**, so it inherits the reference's geometry. Until the Sun check runs on a height model from a different instrument, it belongs closer to Tier 2 than Tier 1.
+- Phase correlation is blunter per tile than our 0.06 px refinement. It can certify the **global bias** to sub-pixel by averaging over ~200 tiles, not per-point accuracy.
+- Check 2 needs a height model for the pair. Without one PROVE reports **"not checked"** rather than guessing.
+- The `polynomial-4+local` model has one free residual per tie point, so warping through it flattens the residual field near tie points. This has to be handled before the leftover map means anything.
+
+### What ships today: the five sufficiency checks
+
+The engine currently reports five checks, shown in the UI as the **PROVE score**. They are real measurements against published limits and they are useful, but they answer a **different question**: *is there enough evidence, spread across the image, to judge at all?*
+
+They are all computed from the engine's own tie points, so they cannot verify correctness. They will be relabelled as a sufficiency report once the three checks above land.
 
 | # | Check | What is measured | Pass if | Why it matters |
 |---|---|---|---|---|
@@ -218,10 +259,51 @@ Image cells with error ≤ 1 px   79%     ≥ 90%       ❌
 
 **Honest notes:**
 
-- The limits were chosen by our team and still need tuning on more image pairs. The website says this under the card.
-- The PROVE score is stricter than the older quality decision. Example: OHRC shrunk to 8 m would still be ACCEPTED by the quality decision (its limit is 3 px), but PROVE calls it WEAK (2/5).
-- All five checks use measurements the engine already makes, so the score costs no extra time.
+- The limits are ours, but they are no longer unexamined. See **Where the limits come from** below.
+- These five are stricter than the older quality decision. Example: OHRC shrunk to 8 m would still be ACCEPTED by the quality decision (its limit is 3 px), but the five checks call it WEAK (2/5).
+- All five use measurements the engine already makes, so they cost no extra time.
+- **They do not prove correctness.** Every one of them comes from the same tie points, so a consistent matching error passes all five. That is exactly the hole the three checks above are being built to close.
+- A sixth slot, `two_factor`, is wired in `prove.py` and stays out of the report until a second factor supplies a value.
 - Code: [`backend/app/registration/prove.py`](backend/app/registration/prove.py), tests in [`backend/tests/test_prove.py`](backend/tests/test_prove.py).
+
+### Where the limits come from
+
+We re-registered the Vikram pair **12 times**, each time injecting a *known* random warp into the source (shift up to 4 px, rotation up to 1.5°, scale up to 0.4%, slight perspective), then compared the recovered mapping against that known warp. Two things come out of it.
+
+**1. The pipeline's precision floor is 0.019 px.**
+
+| | |
+|---|---|
+| Precision floor, median over 12 runs | **0.019 px** |
+| Worst single run | 0.025 px |
+| Achieved on this pair | 0.502 px = **26 floors** |
+| Problem-statement requirement | 1.000 px = **53 floors** |
+
+The floor is 26 times smaller than our result. So **0.50 px is real disagreement between the two images, not pipeline noise**: sensor differences, terrain and the genuine difficulty of the pair. The engine is nowhere near noise-limited, and 0.019 px is roughly what this method could reach if the two images agreed perfectly.
+
+Note what this is: a **precision** floor, not an accuracy one. A constant matcher bias appears on both sides of the injection and cancels, so this says how *repeatable* the pipeline is, not whether it is *right*. Tier 1 answers that.
+
+**2. Every limit now has a measured margin.**
+
+Each check's value moves a little from run to run. A limit that sits many swings away from the measured value is meaningful; one that sits inside the swing is not.
+
+| Check | Median | Swing across 12 runs | Limit | Margin |
+|---|---|---|---|---|
+| Sub-pixel on unseen blocks | 0.491 px | 0.042 | ≤ 1.00 px | **12× the swing** |
+| Rough matches agree | 0.897 | 0.020 | ≥ 0.50 | **20×** |
+| Image covered by tie points | 1.000 | 0.000 | ≥ 0.80 | no swing at all |
+| Tie points spread evenly | 0.826 | 0.037 | ≥ 0.50 | **9×** |
+| No weak regions | 0.969 | 0.031 | ≥ 0.90 | **2×** ⚠ |
+
+**"No weak regions" is the tight one.** A margin of 0.069 against a swing of 0.031 means a slightly different run could drift toward the limit on its own. That is also why it is the check that actually discriminates: it is the one the 5 m zoom-gap pair fails. Worth keeping, worth watching, and the first limit to re-derive once more pairs exist.
+
+Reproduce: `scripts/` has no runner for this yet; the experiment is written up here so the numbers can be re-measured rather than trusted.
+
+### What PROVE is not
+
+- Not a quality percentage
+- Not a probability or a confidence
+- Not comparable between image pairs, because different pairs have different noise floors
 
 ### The quality decision (the older check, still shown)
 
@@ -261,16 +343,18 @@ We made the same real OHRC image harder and harder to match by shrinking it (lik
 
 ---
 
-## 7. 🧪 The 5 demo pairs
+## 7. 🧪 The 7 demo pairs
 
-All five are built from the real Vikram landing-site files. They appear as buttons on the website (`/matching`) when the files exist in `backend/data/`.
+All seven are built from the real Vikram landing-site files. They appear as buttons on the website (`/matching`) when the files exist in `backend/data/`.
 
 | Button | Reference | Source | Result |
 |---|---|---|---|
 | **Vikram landing site (Chandrayaan-3)** | NASA LRO NAC photo, 1 m | Chandrayaan-2 OHRC photo, 1 m | ACCEPTED · 0.50 px · 2,035 points · **5/5 STRONG** |
 | **Photo vs height-map render (same site)** | NAC photo resized to 3 m | Image made from NASA's height map (DTM), 3 m, Sun at 330°, 10° high | ACCEPTED · 0.48 px (1.44 m) · 187 points · **5/5 STRONG** · about 2 s |
 | **Zoom gap: 5 m vs 1 m (moderate)** | NAC photo, 1 m | OHRC shrunk to 5 m | ACCEPTED · 0.89 px · 2,059 points · **4/5 MODERATE** |
-| **Half overlap (moderate)** | NAC photo, 1 m | Only the right half of OHRC | ACCEPTED · 0.53 px · 1,002 points · **3/5 MODERATE** |
+| **Different Sun angle** | DTM render, Sun 330° / 5° high, 3 m | DTM render, Sun 5° / 65° high, 3 m | ACCEPTED · 0.19 px · 196 points · **5/5 STRONG** |
+| **Different viewpoint (20° off-nadir)** | NAC photo, 1 m | OHRC with a 20° off-nadir warp | ACCEPTED · 0.27 px · 340 points · **5/5 STRONG** |
+| **Half overlap** | NAC photo, 1 m | Only the right half of OHRC | ACCEPTED · 0.53 px · 1,002 points · **5/5 STRONG** |
 | **Two different spots (should be rejected)** | Top-left 1 km of NAC | Bottom-right 1 km of OHRC (no shared ground) | **REFUSED** in under 1 s |
 
 **Honest labels:** the height-map image, the 5 m OHRC and the half OHRC are made from real data by us, not new photos. The "photo vs height map" pair is not fully independent, because the NAC photo and the height map both come from NASA's LROC team.
@@ -358,7 +442,7 @@ English and Hindi. Some newer text (the PROVE card, sample labels, landing page 
 ### Backend and website
 
 - [x] FastAPI backend with upload checks (file type whitelist, 200 MB limit, safe file names)
-- [x] Sample-pair API and **5 demo pairs**
+- [x] Sample-pair API and **7 demo pairs**
 - [x] Website connected to the engine: workstation, heatmap, hexagon coverage, match lines, geometry page, full report with downloads
 - [x] PROVE score card on the workstation and the full report
 - [x] Landing page rewritten in simple English, using real images and real numbers
@@ -379,6 +463,11 @@ Ordered by importance.
 ### 🔴 Must do
 
 - [ ] **Deploy the prototype:** the website is live on **Vercel** (https://ps26166-lunar-registration.vercel.app). The backend goes on **Render** with `render.yaml`; after that, the website needs `VITE_API_URL` set to the Render URL so the workstation works online.
+- [ ] **Build PROVE's independent tier** (section 5). This is the contribution, and today only the five sufficiency checks ship. Ordered by how much independence they buy per hour of work.
+  1. **Ground control, several points.** Mark the Vikram lander in the OHRC crop by hand, measure how far the aligned product places it from its published coordinates, then repeat at more LOLA-controlled points so the claim covers the frame rather than one spot. Cheapest real independence we can get.
+  2. **Cross-source check.** Register the same ground against a different mission, for example Kaguya TC at 10 m. Different agency, spacecraft, camera and processing chain, so agreement cannot be explained by anything in the LRO chain. The strongest claim available, and the most work: it needs the data and a second run.
+  3. **Sun check on a height model from a different instrument.** Our DTM is NAC-derived today, so it inherits the reference's geometry. A LOLA-based model makes this a real Tier 1 check instead of a near-Tier-2 one.
+  4. **Leftover map.** Phase correlation per tile. Before anything else, measure whether it is sensitive enough on a lunar pair: inject known shifts of 0.25, 0.5, 1, 2 and 5 px and see what it recovers. If it cannot read a known 2 px shift as 2 px, drop it. Either way it is a second opinion, not independent evidence.
 - [ ] **Work under different sunlight** (our biggest gap). Today the fine step handles brighter or darker images, but not shadows that flip side. Plan:
   1. Make test images for 24 sun directions from the height map and measure where the engine fails (a "failure map").
   2. Add math-based matching that ignores flipped shadows (doubled-angle gradient orientation, sign-invariant correlation).
@@ -388,11 +477,12 @@ Ordered by importance.
 
 ### 🟡 Should do
 
-- [ ] **Stronger proof checks** added to the PROVE score:
-  - Known-answer test on real Moon images (bend OHRC by a known amount, then recover it)
-  - Round-trip check (source → reference → source should return to the same point)
-  - Leftover-error direction check (errors should be random, not all pointing one way)
-  - Agreement with map coordinates (NAC vs height map)
+- [ ] **Relabel the five shipping checks** as a sufficiency report once the three PROVE checks land, so "PROVE" means only the independent layer in the UI, the API and the docs.
+- [ ] **Stop the local model laundering the evidence.** `polynomial-4+local` has one free residual per tie point, so warping through it flattens the residual field near tie points. Decide how the leftover map avoids that before trusting its numbers.
+- [ ] **Other proof ideas, kept but demoted:**
+  - Known-answer test on real Moon images (bend OHRC by a known amount, then recover it). Measures repeatability, not accuracy, because a constant matcher bias cancels on both sides.
+  - Round-trip check (source → reference → source). Weak on its own: a *consistent* mismatch cancels in a cycle, so it catches random error, not the coherent bias we care about.
+  - Agreement with map coordinates (NAC vs height map). Coarse, so it is a gross-error gate rather than a sub-pixel check.
 - [ ] **Big zoom gaps without known pixel size** (today resizing needs the pixel size from the file or the form)
 - [ ] **A real TMC-2 image pair** (today TMC-2 is only simulated by shrinking OHRC)
 - [ ] **PDS4 upload on the website** (the engine reads PDS4, but the upload form accepts only PNG, JPG, WebP and TIFF, and a PDS4 product is two files)
@@ -424,9 +514,9 @@ Ordered by importance.
 ## 12. 🚧 Honest limitations
 
 1. **One real photo pair so far.** More pairs are needed before we can call the engine general.
-2. **No independent answer key.** The honest error is checked against our own correlation points. A steady shading bias would not show up; known-answer tests and more real pairs are the cross-check.
+2. **No independent answer key.** The honest error is checked against our own correlation points, so a steady shading bias would not show up. This is the hole the three PROVE checks in [section 5](#5--prove-under-the-hood) are being built to close; today only the five sufficiency checks ship.
 3. **The reference sets the limit.** 0.50 m is sub-pixel at NAC's 1 m, but about 2 native OHRC pixels (0.25 m each). We report metres instead of promising OHRC-level accuracy.
-4. **Different sunlight is not solved.** The Vikram pair has similar lighting.
+4. **Flipped shadows are not solved.** Measured: the engine handles a Sun-direction change of about 35°, and refuses at 40° rather than return a wrong answer. Shadows flipping to the other side remain open.
 5. **Scale needs the pixel size.** Without it, big zoom gaps are untested.
 6. **Rotations** are only tested up to 8°.
 7. **Map coordinates are in metres only**, no latitude and longitude yet.
