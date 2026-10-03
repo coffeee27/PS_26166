@@ -91,7 +91,7 @@ const OrbitingBody: React.FC<OrbitingBodyProps> = ({
               <div className="bg-[#17212B]/90 border border-[#176B87] text-[#E9EEF3] text-[10px] font-mono px-2 py-1 rounded shadow-lg flex items-center space-x-1 whitespace-nowrap">
                 <span className="w-2 h-2 rounded-full bg-[#E3A93B] animate-ping" />
                 <span className="font-bold text-[#E3A93B]">TARGET: LUNA [MOON]</span>
-                <span className="text-[8px] text-[#A0ACB8] ml-1">(PS-166 SITE)</span>
+                <span className="text-[8px] text-[#A0ACB8] ml-1">(PS 26166 SITE)</span>
               </div>
             </Html>
           </group>

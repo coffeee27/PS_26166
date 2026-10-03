@@ -102,7 +102,7 @@ const ViewpointVisual: React.FC = () => (
 /* 3 ---- Scale: an endless zoom through real frames at four resolutions ---- */
 const ScaleVisual: React.FC = () => {
   const levels = [
-    { label: '86 m', camera: 'IIRS', img: LUNAR.iirsPatch, pixelated: true },
+    { label: '80 m', camera: 'IIRS', img: LUNAR.iirsPatch, pixelated: true },
     { label: '5 m', camera: 'TMC-2 · SIMULATED', img: LUNAR.ohrcAt5m, pixelated: true },
     { label: '1 m', camera: 'LRO NAC', img: LUNAR.nacCrater, pixelated: false },
     { label: '0.25 m', camera: 'OHRC', img: LUNAR.ohrcBrightCrater, pixelated: false },

@@ -200,7 +200,7 @@ export const IntroSection: React.FC = () => {
   const pauseRef = usePauseOffscreen<HTMLElement>();
 
   const stats = [
-    { node: <CountUp to={160} suffix="x" run={statsSeen} />, label: t('landingStatScale') },
+    { node: <CountUp to={320} suffix="x" run={statsSeen} />, label: t('landingStatScale') },
     { node: <CountUp to={0.25} decimals={2} suffix=" m" run={statsSeen} />, label: t('landingStatRes') },
     { node: '<1 px', label: t('landingStatTarget') },
     { node: <CountUp to={3} run={statsSeen} />, label: t('landingStatSensors') },

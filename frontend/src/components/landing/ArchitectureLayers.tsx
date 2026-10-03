@@ -5,11 +5,8 @@ import { useTranslation } from '../../i18n';
 import type { en } from '../../i18n/en';
 import { LUNAR } from './lunarImages';
 import {
-  BriefingVisual,
-  OrbitVisual,
   WorkstationVisual,
   HeatmapVisual,
-  HexVisual,
   CorrespondenceVisual,
   GeoVisual,
   ResultsVisual,
@@ -21,20 +18,32 @@ interface Layer {
   title: Key;
   desc: Key;
   tag: Key;
-  /** Route that opens this layer; omitted for the landing page itself. */
+  /** Route that opens this layer in the workstation. */
   to?: string;
+  /** In-page anchor, for a layer explained further down this page rather than on a screen. */
+  anchor?: string;
   Visual: React.FC;
 }
 
+/*
+ * Three conceptual layers, not three screens. The rung each one sits on is what it
+ * reads, and that is what limits what it may claim: ALIGN produces the answer, the
+ * dependent layer reads ALIGN's own work, PROVE reads only facts from outside the
+ * two images. The screens a run produces are the outputs strip below the stack.
+ */
 const LAYERS: Layer[] = [
-  { title: 'arch1Title', desc: 'arch1Desc', tag: 'arch1Tag', Visual: BriefingVisual },
-  { title: 'arch2Title', desc: 'arch2Desc', tag: 'arch2Tag', to: '/overview', Visual: OrbitVisual },
-  { title: 'arch3Title', desc: 'arch3Desc', tag: 'arch3Tag', to: '/matching', Visual: WorkstationVisual },
-  { title: 'arch4Title', desc: 'arch4Desc', tag: 'arch4Tag', to: '/heatmap', Visual: HeatmapVisual },
-  { title: 'arch5Title', desc: 'arch5Desc', tag: 'arch5Tag', to: '/features', Visual: HexVisual },
-  { title: 'arch6Title', desc: 'arch6Desc', tag: 'arch6Tag', to: '/features', Visual: CorrespondenceVisual },
-  { title: 'arch7Title', desc: 'arch7Desc', tag: 'arch7Tag', to: '/geospatial', Visual: GeoVisual },
-  { title: 'arch8Title', desc: 'arch8Desc', tag: 'arch8Tag', to: '/results', Visual: ResultsVisual },
+  { title: 'arch1Title', desc: 'arch1Desc', tag: 'arch1Tag', to: '/matching', Visual: WorkstationVisual },
+  { title: 'arch2Title', desc: 'arch2Desc', tag: 'arch2Tag', to: '/heatmap', Visual: HeatmapVisual },
+  // PROVE has no screen of its own yet; its section further down this page explains it.
+  { title: 'arch3Title', desc: 'arch3Desc', tag: 'arch3Tag', anchor: '#prove', Visual: GeoVisual },
+];
+
+/** The screens a finished run writes, shown under the stack. */
+const OUTPUTS: { title: Key; desc: Key; to: string; Visual: React.FC }[] = [
+  { title: 'archRepHeatTitle', desc: 'archRepHeatDesc', to: '/heatmap', Visual: HeatmapVisual },
+  { title: 'archRepCoverTitle', desc: 'archRepCoverDesc', to: '/features', Visual: CorrespondenceVisual },
+  { title: 'archRepGeoTitle', desc: 'archRepGeoDesc', to: '/geospatial', Visual: GeoVisual },
+  { title: 'archRepReportTitle', desc: 'archRepReportDesc', to: '/results', Visual: ResultsVisual },
 ];
 
 const pad = (n: number) => String(n + 1).padStart(2, '0');
@@ -44,7 +53,7 @@ const pad = (n: number) => String(n + 1).padStart(2, '0');
 /* ------------------------------------------------------------------ */
 
 const STACK_TOP = 60;
-const STACK_GAP = 50;
+const STACK_GAP = 86;
 const PLANE_HALF_W = 108;
 const PLANE_HALF_H = 40;
 const PLANE_CX = 130;
@@ -250,6 +259,14 @@ export const ArchitectureLayers: React.FC = () => {
                         {t('archOpen')}
                         <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
+                    ) : layer.anchor ? (
+                      <a
+                        href={layer.anchor}
+                        className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-[#5EB8D6] hover:text-white transition-colors"
+                      >
+                        {t('archExplain')}
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </a>
                     ) : (
                       <span className="shrink-0 text-[11px] font-mono font-bold uppercase tracking-wider text-[#7A8794]">
                         {t('archHere')}
@@ -260,6 +277,36 @@ export const ArchitectureLayers: React.FC = () => {
               );
             })}
           </ol>
+        </div>
+
+        {/* What a finished run writes. Each card opens the real result of the last registration. */}
+        <div className="mt-16 lg:mt-24 pt-10 border-t border-white/10">
+          <h3 className="text-lg font-bold text-white">{t('archReportTitle')}</h3>
+          <p className="mt-2 text-sm text-[#8B98A5] max-w-2xl leading-relaxed">{t('archReportDesc')}</p>
+          <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {OUTPUTS.map((output) => {
+              const { Visual } = output;
+              return (
+                <Link
+                  key={output.title}
+                  to={output.to}
+                  className="group flex flex-col rounded-2xl border border-white/10 bg-[#0C1218] overflow-hidden hover:border-[#5EB8D6]/50 hover:-translate-y-1 transition-all duration-300"
+                >
+                  <div className="relative aspect-[8/5] overflow-hidden bg-black">
+                    <Visual />
+                  </div>
+                  <div className="p-4 flex flex-col flex-1">
+                    <h4 className="text-sm font-bold text-white leading-snug">{t(output.title)}</h4>
+                    <p className="mt-1.5 text-xs text-[#8B98A5] leading-relaxed flex-1">{t(output.desc)}</p>
+                    <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-[#5EB8D6] group-hover:text-white transition-colors">
+                      {t('archOpenScreen')}
+                      <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

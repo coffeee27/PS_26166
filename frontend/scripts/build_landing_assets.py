@@ -132,7 +132,14 @@ def main() -> None:
     # 9 x 9 pixels across the rim of the bright OHRC crater, for the sub-pixel illustration.
     patch = crop(ohrc8, 638, 950, 9).astype(int).ravel().tolist()
 
+    # Without --iirs the payload block would be dropped, silently deleting a section of the
+    # landing page, so keep whatever the current realData.ts already holds.
     iirs = None
+    if DATA_TS.exists():
+        existing = DATA_TS.read_text(encoding="utf-8")
+        start, end = existing.find("= {"), existing.rfind(" as const;")
+        if start != -1 and end != -1:
+            iirs = json.loads(existing[start + 2 : end]).get("iirs")
     if args.iirs:
         print("IIRS")
         cube_band = load_image(args.iirs, band=40)
@@ -167,7 +174,11 @@ def main() -> None:
             "baselineRmsePx": 1.26,
             "tiePoints": int(len(full.reference_points)),
             "tiePointRatio": round(len(full.reference_points) / full.stats["grid_points"], 3),
-            "coverage": round(full.coverage.coverage, 3),
+            # What the page calls "covered": the share of the whole reference that has tie
+            # points. `full.coverage` judges only the overlap, which is fairer to the matcher
+            # but always reads high, so it is reported separately.
+            "coverage": full.stats["reference_coverage"],
+            "overlapCoverage": round(full.coverage.coverage, 3),
             "uniformity": round(full.coverage.uniformity, 3),
             "baselineInliers": len(baseline_points),
             "putativeMatches": int(full.stats["putative_matches"]),

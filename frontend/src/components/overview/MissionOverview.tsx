@@ -20,7 +20,7 @@ export const MissionOverview: React.FC = () => {
       <div className="bg-white border border-[#D5DDE5] rounded-lg p-6 shadow-sm space-y-3">
         <div className="flex items-center space-x-2 text-xs font-mono font-bold text-[#176B87] uppercase tracking-widest">
           <span className="w-2.5 h-2.5 bg-[#176B87] rounded-sm" />
-          <span>PS-166 REMOTE SENSING PLATFORM</span>
+          <span>PS 26166 REMOTE SENSING PLATFORM</span>
         </div>
         <h1 className="text-2xl font-bold font-mono text-[#17212B] uppercase tracking-tight">
           {t('mainHeading')}

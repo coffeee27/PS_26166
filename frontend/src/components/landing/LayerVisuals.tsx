@@ -358,10 +358,10 @@ export const GeoVisual: React.FC = () => {
         <Tag x={10} y={126} text="VIKRAM LANDER" />
       </g>
       <g transform="translate(250, 172)">
-        <rect width="136" height="58" rx="5" fill="#E3A93B" fillOpacity="0.1" stroke={AMBER} strokeOpacity="0.5" strokeDasharray="3 3" />
-        <Tag x={10} y={18} text="COMING NEXT" color={AMBER} />
-        <text x="10" y="34" className="font-mono" fontSize="8.5" fill="#E6EDF3">Lat / long and sun</text>
-        <text x="10" y="47" className="font-mono" fontSize="8.5" fill="#E6EDF3">angles for every file</text>
+        <rect width="136" height="58" rx="5" fill="#05080B" fillOpacity="0.9" stroke={ACCENT} strokeOpacity="0.4" />
+        <Tag x={10} y={18} text="SUN GEOMETRY" color="#8B98A5" />
+        <text x="10" y="34" className="font-mono" fontSize="8.5" fontWeight="700" fill="#E6EDF3">AZIMUTH 330.4°</text>
+        <text x="10" y="47" className="font-mono" fontSize="8.5" fontWeight="700" fill="#E6EDF3">ELEVATION 10.2°</text>
       </g>
     </Frame>
   );

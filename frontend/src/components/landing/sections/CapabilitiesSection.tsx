@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Compass, Mountain, Crosshair, Grid, ShieldCheck, FileCheck, Hourglass } from 'lucide-react';
+import { Compass, Mountain, Crosshair, Grid, ShieldCheck, FileCheck } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import { LUNAR } from '../lunarImages';
 import { REAL } from '../realData';
@@ -259,23 +259,6 @@ export const CapabilitiesSection: React.FC = () => {
               </div>
             </article>
           ))}
-        </div>
-
-        {/* Roadmap: what is being built next, from the solution document */}
-        <div className="mt-8 rounded-2xl border border-dashed border-[#E3A93B]/40 bg-[#E3A93B]/[0.04] p-5 sm:p-6">
-          <div className="flex items-center gap-2 text-[#E3A93B]">
-            <Hourglass className="w-4 h-4" />
-            <h3 className="text-xs font-bold font-mono uppercase tracking-wider">{t('comingNextTitle')}</h3>
-          </div>
-          <p className="mt-1.5 text-xs sm:text-sm text-[#8B98A5]">{t('comingNextDesc')}</p>
-          <ul className="mt-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            {(['comingNext1', 'comingNext2', 'comingNext3', 'comingNext4', 'comingNext5'] as const).map((key, i) => (
-              <li key={key} className="flex gap-2.5 rounded-xl border border-white/10 bg-[#0C1218] p-3">
-                <span className="font-mono text-[10px] font-bold text-[#E3A93B]/80 pt-0.5">{String(i + 1).padStart(2, '0')}</span>
-                <span className="text-xs text-[#C9D3DC] leading-snug">{t(key)}</span>
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
     </section>

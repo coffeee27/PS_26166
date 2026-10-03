@@ -11,6 +11,8 @@ import { CapabilitiesSection } from '../components/landing/sections/Capabilities
 import { PipelineSection } from '../components/landing/sections/PipelineSection';
 import { PayloadsSection } from '../components/landing/sections/PayloadsSection';
 import { MetricsSection } from '../components/landing/sections/MetricsSection';
+import { PriorWorkSection } from '../components/landing/sections/PriorWorkSection';
+import { SufficiencySection } from '../components/landing/sections/SufficiencySection';
 import { ProveSection } from '../components/landing/sections/ProveSection';
 import { FinalCtaSection } from '../components/landing/sections/FinalCtaSection';
 
@@ -59,6 +61,8 @@ export const LandingPage: React.FC = () => {
     { href: '#capabilities', label: t('landingNavCapabilities') },
     { href: '#pipeline', label: t('landingNavPipeline') },
     { href: '#payloads', label: t('landingNavSensors') },
+    { href: '#prior-work', label: t('landingNavPriorWork') },
+    { href: '#sufficiency', label: t('landingNavSufficiency') },
     { href: '#prove', label: t('landingNavProve') },
   ];
 
@@ -123,6 +127,8 @@ export const LandingPage: React.FC = () => {
       <PipelineSection />
       <PayloadsSection />
       <MetricsSection />
+      <PriorWorkSection />
+      <SufficiencySection />
       <ProveSection />
       <FinalCtaSection />
 
@@ -134,15 +140,13 @@ export const LandingPage: React.FC = () => {
             {' — '}
             Lunar Image Registration &amp; Correspondence Platform
           </div>
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="text-[#5EB8D6]">ISRO / Department of Space</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px]">
+            <span className="text-[#5EB8D6]">Team 404 Craters Not Found</span>
             <span className="text-white/20">|</span>
-            <span>Space Technology</span>
+            <span>Manya Madaan · Jiya Gulyani · Maully Srivastava · Ananya Krishna · Trisha Jha · Shruti Shukla</span>
+            <span className="text-white/20">|</span>
+            <span className="text-[#5EB8D6]">ISRO / Department of Space</span>
           </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 font-mono text-[10px] leading-relaxed text-[#5F6D7A]">
-          Imagery: Chandrayaan-2 OHRC and IIRS (ISRO / ISSDC) · LRO NAC orthophoto and elevation model (NASA / GSFC / Arizona State University).
-          Engine built with OpenCV, NumPy and SciPy.
         </div>
       </footer>
     </div>
