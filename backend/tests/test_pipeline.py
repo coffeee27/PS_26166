@@ -84,5 +84,8 @@ def test_partial_overlap_restricts_tie_points_and_scales_coarse_matching(lunar_t
     assert result.stats["match_scale"] == round(250 / max(width, height), 4)  # below the default 0.5
     assert 0.5 < result.stats["overlap_fraction"] < 0.8
     assert result.reference_points[:, 0].min() >= 150  # nothing refined where the source has no pixels
+    # Coverage is judged on the overlap, so the strip the source never saw is not counted as a gap.
+    assert result.coverage.coverage > 0.9
+    assert result.coverage.bounds[0] >= 150
     query = np.array([[300.0, 200.0], [450.0, 300.0]])
     assert np.allclose(result.mapping(query), query + np.array([-150.0, 4.0]), atol=0.2)

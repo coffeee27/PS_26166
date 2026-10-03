@@ -83,6 +83,34 @@ def test_spatial_coverage_even_versus_clumped():
     assert clumped.uniformity < 0.2
 
 
+def test_spatial_coverage_judges_the_overlap_not_the_whole_frame():
+    shape = (800, 800)
+    # The source overlaps the top-left corner only; tie points fill that corner evenly.
+    centres = (np.arange(8) + 0.5) * 50
+    gx, gy = np.meshgrid(centres, centres)
+    candidates = np.column_stack([gx.ravel(), gy.ravel()])
+
+    whole_frame = spatial_coverage(candidates, shape)
+    overlap = spatial_coverage(candidates, shape, candidates=candidates)
+
+    # Judged on the frame, the 3/4 of the reference the source never saw looks like a gap.
+    assert whole_frame.coverage == 0.25 and whole_frame.uniformity < 0.4
+    assert overlap.coverage == 1.0 and overlap.uniformity == 1.0
+    assert overlap.bounds == (25.0, 25.0, 375.0, 375.0)
+
+
+def test_spatial_coverage_still_reports_gaps_inside_the_overlap():
+    shape = (800, 800)
+    centres = (np.arange(8) + 0.5) * 100
+    gx, gy = np.meshgrid(centres, centres)
+    candidates = np.column_stack([gx.ravel(), gy.ravel()])
+    found = candidates[candidates[:, 0] < 400]  # the left half refined, the right half failed
+
+    report = spatial_coverage(found, shape, candidates=candidates)
+    assert report.coverage == 0.5
+    assert report.eligible.all()
+
+
 def test_pixels_to_metres():
     assert pixels_to_metres(0.5, 0.8878) == 0.4439
     assert pixels_to_metres(0.5, None) is None

@@ -32,6 +32,7 @@ from .subpixel import refine_correspondences
 class RegistrationConfig:
     match_scale: float = 0.5
     match_max_side: int = 3000  # coarse images are shrunk further so long strips stay tractable
+    match_min_side: int = 1000  # ...but never shrunk below this, or SIFT runs out of features to find
     match_ratio: float = 0.8
     magsac_threshold: float = 3.0  # reference pixels
     balance_grid: tuple[int, int] = (8, 8)
@@ -45,6 +46,7 @@ class RegistrationConfig:
     holdout_blocks: tuple[int, int] = (4, 4)
     models: tuple[ModelSpec, ...] = DEFAULT_MODELS
     min_tie_points: int = 50
+    rng_seed: int = 26166  # MAGSAC++ samples randomly; a fixed seed makes a run reproducible
 
 
 @dataclass
@@ -134,6 +136,11 @@ def register(
 ) -> RegistrationResult:
     """Register `source` onto `reference`; both are single-band float arrays (NaN = no data)."""
     config = config or RegistrationConfig()
+    # MAGSAC++ draws its minimal samples at random, so the same pair could return a
+    # different inlier set, and a different report, on every run. Seeding once per
+    # registration makes a result reproducible from its inputs alone, independent of
+    # how many runs preceded it in this process.
+    cv2.setRNGSeed(config.rng_seed)
     reference = np.asarray(reference, dtype=np.float32)
     source = np.asarray(source, dtype=np.float32)
     stats: dict = {}
@@ -146,7 +153,14 @@ def register(
 
     # Coarse stage.
     largest_side = max(*reference.shape, *source.shape)
-    match_scale = min(config.match_scale, config.match_max_side / largest_side)
+    # Shrinking the coarse stage keeps long strips tractable, but on a small pair it throws
+    # away the only features there are: a 666 px render halved to 333 px yields barely enough
+    # matches to clear the consistency gate, and whether it clears is then left to MAGSAC's
+    # own randomness. So `match_max_side` is a hard ceiling and `match_min_side` a soft floor
+    # that may never breach it; neither ever upsamples past the native resolution.
+    ceiling = config.match_max_side / largest_side
+    floor = min(1.0, config.match_min_side / largest_side)
+    match_scale = min(ceiling, max(config.match_scale, floor))
     matches = match_features(reference, source, scale=match_scale, ratio=config.match_ratio)
     H, inliers = robust_homography(matches, config.magsac_threshold)
     balanced = balance_by_grid(
@@ -204,6 +218,10 @@ def register(
     assert selection is not None
     stats["grid_points"] = int(len(overlap))  # grid points inside the overlap, the denominator of the tie-point ratio
     stats["overlap_fraction"] = round(len(overlap) / max(len(grid), 1), 3)
+    # `coverage` judges the overlap, which is fair to the matcher. This judges the whole
+    # reference, which is what the user actually gets verified, and is how PROVE can say
+    # which part of the map it could not check.
+    stats["reference_coverage"] = round(spatial_coverage(ref_points, reference.shape).coverage, 3)
     stats["total_seconds"] = round(time.perf_counter() - started, 2)
     fitted = selection.predict
 
@@ -216,7 +234,7 @@ def register(
         holdout_rmse=selection.report.rmse,
         fit_rmse=selection.report.fit_rmse,
         model_rmse={name: report.rmse for name, report in selection.reports.items()},
-        coverage=spatial_coverage(ref_points, reference.shape),
+        coverage=spatial_coverage(ref_points, reference.shape, candidates=overlap),
         reference_gsd=reference_gsd,
         stats=stats,
     )

@@ -77,26 +77,78 @@ def holdout_rmse(
     return HoldoutReport(rmse=rmse(errors), fit_rmse=rmse(fit_errors), errors=errors, folds=folds)
 
 
+# (x0, y0, x1, y1) in reference pixels, edges included.
+Bounds = tuple[float, float, float, float]
+
+
+def bounding_box(points: np.ndarray) -> Bounds:
+    pts = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+    return (float(pts[:, 0].min()), float(pts[:, 1].min()), float(pts[:, 0].max()), float(pts[:, 1].max()))
+
+
+def cell_indices(points: np.ndarray, bounds: Bounds, grid: tuple[int, int]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Row and column of each point on a rows x cols grid over `bounds`, plus an inside-bounds mask."""
+    x0, y0, x1, y1 = bounds
+    rows, cols = grid
+    pts = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+    inside = (pts[:, 0] >= x0) & (pts[:, 0] <= x1) & (pts[:, 1] >= y0) & (pts[:, 1] <= y1)
+    row = np.clip(((pts[:, 1] - y0) / max(y1 - y0, 1e-9) * rows).astype(int), 0, rows - 1)
+    col = np.clip(((pts[:, 0] - x0) / max(x1 - x0, 1e-9) * cols).astype(int), 0, cols - 1)
+    return row, col, inside
+
+
+def cell_counts(points: np.ndarray, bounds: Bounds, grid: tuple[int, int]) -> np.ndarray:
+    row, col, inside = cell_indices(points, bounds, grid)
+    counts = np.zeros(grid, dtype=int)
+    np.add.at(counts, (row[inside], col[inside]), 1)
+    return counts
+
+
 @dataclass
 class CoverageReport:
-    coverage: float  # fraction of grid cells containing at least one point
+    coverage: float  # fraction of the cells a tie point could fall in that hold at least one
     uniformity: float  # 1 / (1 + coefficient of variation of per-cell counts), 1 = perfectly even
     counts: np.ndarray  # (rows, cols) points per cell
+    bounds: Bounds  # the area the grid covers, in reference pixels
+    eligible: np.ndarray  # (rows, cols) bool: cells where a tie point was possible
 
 
-def spatial_coverage(points: np.ndarray, image_shape: tuple[int, int], grid: tuple[int, int] = (8, 8)) -> CoverageReport:
-    """How evenly points spread over the image, on a rows x cols grid."""
+def spatial_coverage(
+    points: np.ndarray,
+    image_shape: tuple[int, int],
+    grid: tuple[int, int] = (8, 8),
+    candidates: np.ndarray | None = None,
+) -> CoverageReport:
+    """How evenly points spread over the area where they could have been found.
+
+    `candidates` are the positions a tie point could have been placed at: the
+    grid points inside the overlap. Given them, the grid is laid over their
+    bounding box and only cells holding a candidate count, so a pair that
+    overlaps in one corner is judged on that corner instead of on the whole
+    reference frame, where the rest is empty for a reason that is not an error.
+    Without them the whole image is used, and every cell counts.
+    """
     height, width = image_shape[:2]
-    rows, cols = grid
-    counts = np.zeros((rows, cols), dtype=int)
-    pts = np.asarray(points, dtype=np.float64).reshape(-1, 2)
-    inside = (pts[:, 0] >= 0) & (pts[:, 0] < width) & (pts[:, 1] >= 0) & (pts[:, 1] < height)
-    for x, y in pts[inside]:
-        counts[min(int(y / height * rows), rows - 1), min(int(x / width * cols), cols - 1)] += 1
+    if candidates is not None and len(np.asarray(candidates).reshape(-1, 2)) == 0:
+        candidates = None
+    bounds = bounding_box(candidates) if candidates is not None else (0.0, 0.0, float(width), float(height))
 
-    mean = counts.mean()
-    uniformity = 1.0 / (1.0 + counts.std() / mean) if mean > 0 else 0.0
-    return CoverageReport(coverage=float(np.count_nonzero(counts) / counts.size), uniformity=float(uniformity), counts=counts)
+    counts = cell_counts(points, bounds, grid)
+    eligible = cell_counts(candidates, bounds, grid) > 0 if candidates is not None else np.ones(grid, dtype=bool)
+    possible = int(eligible.sum())
+    if possible == 0:
+        return CoverageReport(0.0, 0.0, counts, bounds, eligible)
+
+    within = counts[eligible]
+    mean = within.mean()
+    uniformity = 1.0 / (1.0 + within.std() / mean) if mean > 0 else 0.0
+    return CoverageReport(
+        coverage=float(np.count_nonzero(within) / possible),
+        uniformity=float(uniformity),
+        counts=counts,
+        bounds=bounds,
+        eligible=eligible,
+    )
 
 
 def pixels_to_metres(pixels: float, gsd: float | None) -> float | None:

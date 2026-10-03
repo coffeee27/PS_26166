@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from .imaging import normalize_to_uint8
+from .metrics import Bounds, cell_indices
 
 
 def preview_image(image: np.ndarray, max_side: int = 1600) -> np.ndarray:
@@ -102,15 +103,23 @@ def match_visualization(
 
 
 def cell_statistics(
-    points: np.ndarray, errors: np.ndarray, image_shape: tuple[int, int], grid: tuple[int, int] = (8, 8)
+    points: np.ndarray,
+    errors: np.ndarray,
+    image_shape: tuple[int, int],
+    grid: tuple[int, int] = (8, 8),
+    bounds: Bounds | None = None,
 ) -> list[dict]:
-    """Tie-point count and held-out RMSE for every cell of a rows x cols grid (row-major)."""
+    """Tie-point count and held-out RMSE for every cell of a rows x cols grid (row-major).
+
+    `bounds` is the area the grid covers, normally the overlap of the two images
+    (`CoverageReport.bounds`) so the cells match the coverage figures; without it
+    the grid spans the whole reference image.
+    """
     height, width = image_shape[:2]
     rows, cols = grid
     points = np.asarray(points, dtype=np.float64).reshape(-1, 2)
     errors = np.asarray(errors, dtype=np.float64)
-    cy = np.clip((points[:, 1] / height * rows).astype(int), 0, rows - 1)
-    cx = np.clip((points[:, 0] / width * cols).astype(int), 0, cols - 1)
+    cy, cx, _ = cell_indices(points, bounds or (0.0, 0.0, float(width), float(height)), grid)
 
     cells = []
     for row in range(rows):

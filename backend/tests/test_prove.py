@@ -38,3 +38,18 @@ def test_limits_are_inclusive_and_missing_measurements_fail():
     nothing = prove_score(0.2, 0, 0, 0.9, 0.9, _cells([None, None]))
     assert not _by_id(nothing)["agreement"]["passed"] and _by_id(nothing)["agreement"]["value"] is None
     assert not _by_id(nothing)["good_cells"]["passed"]
+
+
+def test_two_factor_check_is_left_out_until_the_second_factor_runs():
+    score = prove_score(0.5, 1724, 1548, 0.98, 0.75, _cells([0.3] * 19 + [1.4]))
+
+    assert score["total"] == 5 and "two_factor" not in _by_id(score)
+
+
+def test_two_factor_agreement_adds_a_sixth_check():
+    strong = prove_score(0.5, 1724, 1548, 0.98, 0.75, _cells([0.3] * 19 + [1.4]), two_factor_agreement=0.94)
+    assert (strong["passed"], strong["total"], strong["evidence"]) == (6, 6, "STRONG")
+    assert _by_id(strong)["two_factor"]["value"] == 0.94
+
+    disagreeing = prove_score(0.5, 1724, 1548, 0.98, 0.75, _cells([0.3] * 19 + [1.4]), two_factor_agreement=0.61)
+    assert (disagreeing["passed"], disagreeing["total"], disagreeing["evidence"]) == (5, 6, "MODERATE")

@@ -12,6 +12,15 @@
    the 1 m NAC orthophoto. It still aligns, but some regions are weaker (moderate PROVE).
 4. demo_half_overlap: only the east half of OHRC against the whole NAC orthophoto.
    What aligns is accurate, but half of the reference has no tie points (moderate PROVE).
+5. demo_illumination: the same LROC DTM rendered twice, with the Sun 35 deg apart in
+   azimuth and 60 deg apart in elevation. Both renders come from the same terrain on the
+   same grid, so the true answer is exactly identity and the measured error is real
+   accuracy, not a self-graded number. Measured: 0.057 px median at 98% coverage. The
+   engine refuses at a 40 deg azimuth gap, so this sits just inside what it can do.
+6. demo_viewpoint: a 20 deg off-nadir view sampled from inside OHRC, so the frame is full
+   with no empty corners, registered onto a matching crop of the 1 m NAC orthophoto. The
+   warp is known, so the error against it is real accuracy. Measured: 0.20 px median,
+   381 tie points, 100% coverage.
 
 Run from backend/:  python scripts/build_demo_samples.py
 """
@@ -38,6 +47,22 @@ DTM = SITE / "nac_dtm" / "vikram_landing_site_dtm.tif"
 SUN_AZIMUTH = 330.0
 SUN_ELEVATION = 10.0
 ZOOM_GAP_GSD = 5.0
+# Illumination demo: 35 deg apart in azimuth, 60 deg apart in elevation. Measured to work
+# at 0.057 px true error with 98% coverage. A 40 deg azimuth gap is refused, so this sits
+# just inside the limit. Note the site is flat (mean slope 3 deg, 53 m of relief over 2 km),
+# so the two renders differ mostly in overall brightness; after a contrast stretch their
+# structures still correlate at +0.80. Rugged terrain would show a far larger difference.
+SUN_A = (330.0, 5.0)
+SUN_B = (5.0, 65.0)
+# Viewpoint demo: a 20 deg off-nadir look with a perspective term. The window is sampled
+# from inside OHRC so the output frame is completely filled, the way a real off-nadir image
+# is: a full rectangle whose ground footprint is skewed, not a rotated picture with empty
+# corners. The NAC reference is cropped to the part that footprint actually covers, so the
+# pair still reaches 100% coverage. Measured: 0.20 px true error, 381 tie points.
+TILT_DEGREES = 20.0
+TILT_PERSPECTIVE = 1.0e-4
+TILT_OUTPUT = 1380
+TILT_REF_CROP = 800
 _MODEL_PIXEL_SCALE = 33550
 
 
@@ -49,6 +74,16 @@ def with_pixel_size(metadata: dict, pixel_size: float) -> dict:
             value = (pixel_size, pixel_size, 0.0)
         tags.append((code, dtype, count, value))
     return {**metadata, "geotiff_tags": tags}
+
+
+def tilt_homography(width: int, height: int, degrees: float, perspective: float, output: int) -> np.ndarray:
+    """Source pixel -> output pixel for an off-nadir look centred on the source."""
+    th = np.radians(degrees)
+    rotate = np.array([[np.cos(th), -np.sin(th), 0.0], [np.sin(th), np.cos(th), 0.0], [0.0, 0.0, 1.0]])
+    to_origin = np.array([[1.0, 0.0, -width / 2.0], [0.0, 1.0, -height / 2.0], [0.0, 0.0, 1.0]])
+    back = np.array([[1.0, 0.0, output / 2.0], [0.0, 1.0, output / 2.0], [0.0, 0.0, 1.0]])
+    skew = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [perspective, perspective * 0.6, 1.0]])
+    return back @ skew @ rotate @ to_origin
 
 
 def hillshade(dem: np.ndarray, pixel_m: float, azimuth: float, elevation: float) -> np.ndarray:
@@ -99,6 +134,33 @@ def main() -> None:
     half.mkdir(parents=True, exist_ok=True)
     write_geotiff(half / "ohrc_east_half.tif", ohrc.data[:, ohrc.shape[1] // 2 :])
     print(f"wrote {half}")
+
+    # Both renders are written on 0-255, not 0-1: the fine matcher rejects any reference
+    # template whose standard deviation is below 1.0, so a 0-1 image loses every tie point.
+    sun = DATA / "demo_illumination"
+    sun.mkdir(parents=True, exist_ok=True)
+    for name, (azimuth, elevation) in (("sun_a_3m.tif", SUN_A), ("sun_b_3m.tif", SUN_B)):
+        shade = (hillshade(dem, dtm_gsd, azimuth, elevation) * 255.0).astype(np.float32)
+        shade[missing] = np.nan
+        write_geotiff(sun / name, shade, dtm.metadata)
+    print(f"wrote {sun}")
+
+    view = DATA / "demo_viewpoint"
+    view.mkdir(parents=True, exist_ok=True)
+    rows, cols = ohrc.shape
+    homography = tilt_homography(cols, rows, TILT_DEGREES, TILT_PERSPECTIVE, TILT_OUTPUT)
+    tilted = cv2.warpPerspective(
+        ohrc.data.astype(np.float32), homography, (TILT_OUTPUT, TILT_OUTPUT),
+        flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=float("nan"),
+    )
+    write_geotiff(view / "ohrc_tilted.tif", tilted)
+    offset = (nac.shape[0] - TILT_REF_CROP) // 2
+    write_geotiff(
+        view / "nac_crop.tif",
+        nac.data[offset : offset + TILT_REF_CROP, offset : offset + TILT_REF_CROP],
+        nac.metadata,
+    )
+    print(f"wrote {view}")
 
 
 if __name__ == "__main__":
